@@ -1,0 +1,182 @@
+% ================================================================
+%  BAI 2 - HIEU CHINH OFFSET (CALIBRATION)
+%  MPU6500 IMU - Ky Thuat Cam Bien
+% ================================================================
+%  Du lieu:
+%    bai2_gyro.txt   : 500 mau gyro khi cam bien yen lang
+%                      Format: gx,gy,gz
+%    bai2_accel_pos1.txt ... bai2_accel_pos6.txt
+%                    : 200 mau accel moi vi tri
+%                      Format: ax,ay,az
+% ================================================================
+
+clc; clear; close all;
+
+%% ======================================================
+%  PHAN A: HIEU CHINH GYROSCOPE
+%% ======================================================
+fprintf('=== BAI 2A: HIEU CHINH GYROSCOPE ===\n');
+
+file_gyro = 'bai2_gyro.txt';
+Gdata = readmatrix(file_gyro);
+gx = Gdata(:,1); gy = Gdata(:,2); gz = Gdata(:,3);
+N  = length(gx);
+t  = (0:N-1)*0.01;
+
+offset_gx = mean(gx);
+offset_gy = mean(gy);
+offset_gz = mean(gz);
+std_gx    = std(gx);
+std_gy    = std(gy);
+std_gz    = std(gz);
+
+fprintf('  Offset Gx = %+.5f deg/s  |  STD = %.6f\n', offset_gx, std_gx);
+fprintf('  Offset Gy = %+.5f deg/s  |  STD = %.6f\n', offset_gy, std_gy);
+fprintf('  Offset Gz = %+.5f deg/s  |  STD = %.6f\n', offset_gz, std_gz);
+
+if abs(offset_gx)<0.05 && abs(offset_gy)<0.05 && abs(offset_gz)<0.05
+    fprintf('  [OK] Gyro offset < 0.05 deg/s\n\n');
+else
+    fprintf('  [!] Mot so offset > 0.05 deg/s\n\n');
+end
+
+% Sau hieu chinh
+gx_cal = gx - offset_gx;
+gy_cal = gy - offset_gy;
+gz_cal = gz - offset_gz;
+
+% Ve do thi Gyro
+fig1 = figure('Name','Bai 2A - Hieu chinh Gyro','Position',[50 50 1200 500]);
+
+subplot(1,2,1);
+plot(t,gx,'r',t,gy,'g',t,gz,'b','LineWidth',0.8);
+hold on;
+yline(0,'k--','LineWidth',1.5);
+xlabel('Thoi gian (s)'); ylabel('Van toc goc (deg/s)');
+title('Gyro TRUOC hieu chinh');
+legend('Gx','Gy','Gz'); grid on;
+
+subplot(1,2,2);
+plot(t,gx_cal,'r',t,gy_cal,'g',t,gz_cal,'b','LineWidth',0.8);
+hold on;
+yline(0,'k--','LineWidth',1.5);
+xlabel('Thoi gian (s)'); ylabel('Van toc goc (deg/s)');
+title('Gyro SAU hieu chinh');
+legend('Gx cal','Gy cal','Gz cal'); grid on;
+
+sgtitle('BAI 2A - HIEU CHINH GYROSCOPE','FontWeight','bold');
+saveas(fig1,'bai2a_gyro_calib.png');
+
+%% ======================================================
+%  PHAN B: HIEU CHINH ACCELEROMETER (6-POSITION)
+%% ======================================================
+fprintf('=== BAI 2B: HIEU CHINH ACCELEROMETER (6-position) ===\n');
+
+pos_labels = {'Pos1: Z len (+Az)', 'Pos2: Z xuong (-Az)',...
+              'Pos3: X len (+Ax)', 'Pos4: X xuong (-Ax)',...
+              'Pos5: Y len (+Ay)', 'Pos6: Y xuong (-Ay)'};
+pos_files  = {'bai2_accel_pos1.txt','bai2_accel_pos2.txt',...
+              'bai2_accel_pos3.txt','bai2_accel_pos4.txt',...
+              'bai2_accel_pos5.txt','bai2_accel_pos6.txt'};
+
+means = zeros(6,3); % [pos][ax,ay,az]
+all_ax = {}; all_ay = {}; all_az = {};
+
+for p = 1:6
+    Adata = readmatrix(pos_files{p});
+    a = Adata(:,1); b = Adata(:,2); c = Adata(:,3);
+    means(p,:) = [mean(a), mean(b), mean(c)];
+    all_ax{p} = a; all_ay{p} = b; all_az{p} = c; %#ok<SAGROW>
+    fprintf('  %s -> Ax=%.4f  Ay=%.4f  Az=%.4f\n',...
+        pos_labels{p}, means(p,1), means(p,2), means(p,3));
+end
+
+% Tinh offset: offset = -(mean_up + mean_down)/2
+offset_ax = -(means(3,1) + means(4,1)) / 2;  % X: Pos3 up + Pos4 down
+offset_ay = -(means(5,2) + means(6,2)) / 2;  % Y: Pos5 up + Pos6 down
+offset_az = -(means(1,3) + means(2,3)) / 2;  % Z: Pos1 up + Pos2 down
+
+fprintf('\n--- Offset Accelerometer ---\n');
+fprintf('  offset_ax = %+.5f g\n', offset_ax);
+fprintf('  offset_ay = %+.5f g\n', offset_ay);
+fprintf('  offset_az = %+.5f g\n\n', offset_az);
+
+% Kiem tra |a| sau hieu chinh cho tung vi tri
+fprintf('--- Kiem tra |a| sau hieu chinh (ly tuong: 1.000 g) ---\n');
+err_max = 0;
+for p = 1:6
+    ax_c = all_ax{p} + offset_ax;
+    ay_c = all_ay{p} + offset_ay;
+    az_c = all_az{p} + offset_az;
+    mag_c = mean(sqrt(ax_c.^2 + ay_c.^2 + az_c.^2));
+    err   = abs(mag_c - 1.0) * 100;
+    err_max = max(err_max, err);
+    ok = ''; if err > 3.0, ok = ' [!]'; end
+    fprintf('  %s -> |a| = %.4f g  (sai lech %.2f%%)%s\n',...
+        pos_labels{p}, mag_c, err, ok);
+end
+if err_max <= 3.0
+    fprintf('\n  [OK] Tat ca vi tri sai lech < 3%%\n');
+else
+    fprintf('\n  [!] Co vi tri sai lech > 3%%\n');
+end
+
+%% Ve do thi Accel 6-position
+fig2 = figure('Name','Bai 2B - Hieu chinh Accel','Position',[50 50 1300 700]);
+
+colors = {'r','b','g','m','c','k'};
+ax_ideal_each = [0,0,1,0,0, 0,0,-1,0,0, 1,0, 0,0,0, -1,0,0,0,0, 0,1,0,0,0, 0,-1,0,0,0];
+% Truoc hieu chinh
+subplot(2,3,1:2);
+bar_data = [means(:,1), means(:,2), means(:,3)];
+bar(bar_data);
+set(gca,'XTickLabel',{'Z+','Z-','X+','X-','Y+','Y-'});
+hold on;
+yline(1,'k--'); yline(-1,'k--');
+xlabel('Vi tri'); ylabel('Gia toc (g)');
+title('Mean Accel moi vi tri (TRUOC hieu chinh)');
+legend('Ax','Ay','Az'); grid on;
+
+% So sanh mag truoc va sau
+subplot(2,3,3);
+mag_before = zeros(1,6);
+mag_after  = zeros(1,6);
+for p = 1:6
+    mag_before(p) = mean(sqrt(all_ax{p}.^2+all_ay{p}.^2+all_az{p}.^2));
+    ax_c = all_ax{p}+offset_ax;
+    ay_c = all_ay{p}+offset_ay;
+    az_c = all_az{p}+offset_az;
+    mag_after(p) = mean(sqrt(ax_c.^2+ay_c.^2+az_c.^2));
+end
+x = 1:6;
+plot(x, mag_before,'rs--','LineWidth',1.5,'MarkerSize',8,'DisplayName','Truoc calib');
+hold on;
+plot(x, mag_after,'bo-','LineWidth',1.5,'MarkerSize',8,'DisplayName','Sau calib');
+yline(1.0,'k--','1g','LineWidth',1.5);
+yline(1.03,'g:','LineWidth',1); yline(0.97,'g:','LineWidth',1);
+set(gca,'XTick',1:6,'XTickLabel',{'Z+','Z-','X+','X-','Y+','Y-'});
+xlabel('Vi tri'); ylabel('|a| (g)');
+title('|a| truoc/sau hieu chinh (ly tuong = 1.0)');
+legend; grid on;
+
+% Phan bo raw vs calibrated Pos1 (Az)
+for p_show = [1, 3, 5]  % 3 truc
+    subplot(2,3, (p_show+3)/2 + 2); % rows 4,5,6
+    if p_show==1, idx_raw=3; idx_cal=3; % Az
+    elseif p_show==3, idx_raw=1; idx_cal=1; % Ax
+    else, idx_raw=2; idx_cal=2; end % Ay
+    raw_v = eval(sprintf('all_a%s{%d}',char('x'+idx_raw-1),p_show));
+    cal_v = raw_v + [offset_ax,offset_ay,offset_az](idx_cal);
+    hold on;
+    histogram(raw_v,25,'FaceColor','r','FaceAlpha',0.5,'DisplayName','Raw');
+    histogram(cal_v,25,'FaceColor','b','FaceAlpha',0.5,'DisplayName','Calibrated');
+    axis_name = char('X'+idx_raw-1);
+    xlabel(sprintf('A%s (g)',axis_name)); ylabel('Count');
+    title(sprintf('%s - Truoc/Sau calib',pos_labels{p_show}));
+    legend; grid on;
+end
+
+sgtitle('BAI 2B - HIEU CHINH ACCELEROMETER 6-POSITION','FontWeight','bold');
+saveas(fig2,'bai2b_accel_calib.png');
+
+fprintf('\n[OK] Da luu bai2a_gyro_calib.png  va  bai2b_accel_calib.png\n');

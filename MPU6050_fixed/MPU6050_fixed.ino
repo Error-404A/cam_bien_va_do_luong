@@ -112,7 +112,7 @@ unsigned long last_us  = 0;
 float dt               = 0.01f;   // timestep (s)
 
 // Shock detection
-#define SHOCK_THRESHOLD  2.0f      // g (ngưỡng phát hiện shock)
+#define SHOCK_THRESHOLD  2.0f      // g (ngưỡng phát hiện shock, tính từ độ lệch so với 1g)
 
 // ================================================================
 //  HÀM I2C CƠ BẢN
@@ -210,16 +210,15 @@ void read_sensor() {
   imu.temp_c  = (imu.temp_raw / 321.0f) + 21.0f;
 
   // Áp dụng offset hiệu chỉnh
-  // Accel: calib.ax/ay/az_off được tính với dấu âm ở đầu công thức
-  //        nên cộng vào (+=) để bù đúng chiều
-  // Gyro:  calib.gx/gy/gz_off là mean thực, trừ ra (-=) để về 0
+  // Accel: offset = -(mean_up + mean_down)/2  → cộng vào để bù
+  // Gyro:  offset = mean khi đứng yên         → trừ ra để về 0
   if (calib.done) {
-    imu.ax_g   += calib.ax_off;   // FIX: đổi -= thành +=
-    imu.ay_g   += calib.ay_off;   // FIX: đổi -= thành +=
-    imu.az_g   += calib.az_off;   // FIX: đổi -= thành +=
-    imu.gx_dps -= calib.gx_off;   // giữ nguyên
-    imu.gy_dps -= calib.gy_off;   // giữ nguyên
-    imu.gz_dps -= calib.gz_off;   // giữ nguyên
+    imu.ax_g   += calib.ax_off;
+    imu.ay_g   += calib.ay_off;
+    imu.az_g   += calib.az_off;
+    imu.gx_dps -= calib.gx_off;
+    imu.gy_dps -= calib.gy_off;
+    imu.gz_dps -= calib.gz_off;
   }
 }
 
@@ -304,11 +303,13 @@ void task1_static() {
   delay(3000);
 
   const int N = 500;
-  // Dùng double để tích lũy tránh tràn số
   double sum_ax=0,sum_ay=0,sum_az=0;
   double sum_gx=0,sum_gy=0,sum_gz=0;
   double sq_ax=0,sq_ay=0,sq_az=0;
   double sq_gx=0,sq_gy=0,sq_gz=0;
+
+  // FIX: In header CSV trước vòng lặp (nhất quán với các bài khác)
+  Serial.println(F("ax,ay,az,gx,gy,gz"));
 
   for (int i = 0; i < N; i++) {
     // Đọc RAW để đánh giá đặc tính tĩnh gốc (KHÔNG áp calib)
@@ -327,15 +328,14 @@ void task1_static() {
     sq_ax+=ax*ax; sq_ay+=ay*ay; sq_az+=az*az;
     sq_gx+=gx*gx; sq_gy+=gy*gy; sq_gz+=gz*gz;
 
-    if (i == 0) {
-      Serial.println(F("ax,ay,az,gx,gy,gz"));  // header đúng chuẩn MATLAB
-    }
     Serial.print(ax,4); Serial.print(',');
     Serial.print(ay,4); Serial.print(',');
     Serial.print(az,4); Serial.print(',');
     Serial.print(gx,4); Serial.print(',');
     Serial.print(gy,4); Serial.print(',');
     Serial.println(gz,4);
+
+    delay(10);
   }
 
   // Tính mean và STD
@@ -402,6 +402,9 @@ void task2_calib_gyro() {
   double sgx=0,sgy=0,sgz=0;
   double sq_gx=0,sq_gy=0,sq_gz=0;
 
+  // FIX: In header CSV trước vòng lặp
+  Serial.println(F("gx,gy,gz"));
+
   for (int i = 0; i < N; i++) {
     uint8_t buf[14];
     mpu_read_burst(REG_ACCEL_XOUT_H, buf, 14);
@@ -410,9 +413,7 @@ void task2_calib_gyro() {
     float gz = (int16_t)((buf[12]<<8)|buf[13])  / GYRO_SCALE_250;
     sgx+=gx; sgy+=gy; sgz+=gz;
     sq_gx+=gx*gx; sq_gy+=gy*gy; sq_gz+=gz*gz;
-    if (i == 0){
-      Serial.println(F("gx,gy,gz"));
-    }
+
     Serial.print(gx, 4); Serial.print(',');
     Serial.print(gy, 4); Serial.print(',');
     Serial.println(gz, 4);
@@ -449,15 +450,15 @@ void task2_calib_accel_6pos() {
   Serial.println(F("Bam phim bat ky de chuyen sang vi tri tiep theo.\n"));
 
   const char* pos_labels[6] = {
-    "Pos 1 - Z HUONG LEN   (mat cam bien nhin len tran)  → Az ≈ +1g",
-    "Pos 2 - Z HUONG XUONG (lat nguoc, mat nhin xuong)   → Az ≈ -1g",
-    "Pos 3 - X HUONG LEN   (dau truc X nhin len tran)    → Ax ≈ +1g",
-    "Pos 4 - X HUONG XUONG (dau truc X nhin xuong dat)   → Ax ≈ -1g",
-    "Pos 5 - Y HUONG LEN   (dau truc Y nhin len tran)    → Ay ≈ +1g",
-    "Pos 6 - Y HUONG XUONG (dau truc Y nhin xuong dat)   → Ay ≈ -1g"
+    "Pos 1 - Z HUONG LEN   (mat cam bien nhin len tran)  -> Az ~ +1g",
+    "Pos 2 - Z HUONG XUONG (lat nguoc, mat nhin xuong)   -> Az ~ -1g",
+    "Pos 3 - X HUONG LEN   (dau truc X nhin len tran)    -> Ax ~ +1g",
+    "Pos 4 - X HUONG XUONG (dau truc X nhin xuong dat)   -> Ax ~ -1g",
+    "Pos 5 - Y HUONG LEN   (dau truc Y nhin len tran)    -> Ay ~ +1g",
+    "Pos 6 - Y HUONG XUONG (dau truc Y nhin xuong dat)   -> Ay ~ -1g"
   };
 
-  float means[6][3]; // [pos][ax,ay,az]
+  float means[6][3]; // [pos][ax, ay, az]
   const int N = 200;
 
   for (int pos = 0; pos < 6; pos++) {
@@ -466,6 +467,9 @@ void task2_calib_accel_6pos() {
     Serial.println(F(">> Dat dung vi tri roi nhan phim bat ky:"));
     wait_serial();
     delay(500);
+
+    // FIX: In header CSV trước mỗi vị trí để nhất quán khi parse dữ liệu
+    Serial.println(F("ax,ay,az"));
 
     double sax=0,say=0,saz=0;
     for (int i = 0; i < N; i++) {
@@ -484,19 +488,24 @@ void task2_calib_accel_6pos() {
     means[pos][0] = sax/N;
     means[pos][1] = say/N;
     means[pos][2] = saz/N;
-    Serial.print(F("  Ax=")); Serial.print(means[pos][0],4);
+    Serial.print(F("  Mean -> Ax=")); Serial.print(means[pos][0],4);
     Serial.print(F("  Ay=")); Serial.print(means[pos][1],4);
     Serial.print(F("  Az=")); Serial.println(means[pos][2],4);
   }
 
-  // Tính offset theo công thức:
-  // offset = -(mean_positive + mean_negative) / 2
-  // Pos 2(Zup)=0, Pos 1(Zdown)=1 → az
-  // Pos 2(Xup)=2, Pos 3(Xdown)=3 → ax
-  // Pos 4(Yup)=4, Pos 5(Ydown)=5 → ay
-  calib.ax_off = -(means[2][0] + means[3][0]) / 2.0f;
-  calib.ay_off = -(means[4][1] + means[5][1]) / 2.0f;
-  calib.az_off = -(means[0][2] + means[1][2]) / 2.0f;
+  // Tính offset theo công thức: offset = -(mean_positive + mean_negative) / 2
+  // accel_cal = (raw / scale_factor) + offset
+  //
+  // Index:
+  //   [0] = Pos1: Z huong len  → Az ≈ +1g
+  //   [1] = Pos2: Z huong xuong → Az ≈ -1g
+  //   [2] = Pos3: X huong len  → Ax ≈ +1g
+  //   [3] = Pos4: X huong xuong → Ax ≈ -1g
+  //   [4] = Pos5: Y huong len  → Ay ≈ +1g
+  //   [5] = Pos6: Y huong xuong → Ay ≈ -1g
+  calib.ax_off = -(means[2][0] + means[3][0]) / 2.0f;   // X: Pos3(up) + Pos4(down)
+  calib.ay_off = -(means[4][1] + means[5][1]) / 2.0f;   // Y: Pos5(up) + Pos6(down)
+  calib.az_off = -(means[0][2] + means[1][2]) / 2.0f;   // Z: Pos1(up) + Pos2(down)
   calib.done   = true;
 
   Serial.println(F("\n--- Ket qua hieu chinh Accel ---"));
@@ -504,11 +513,16 @@ void task2_calib_accel_6pos() {
   Serial.print(F("  ay_offset = ")); Serial.println(calib.ay_off,5);
   Serial.print(F("  az_offset = ")); Serial.println(calib.az_off,5);
 
-  // Kiem tra
-  float mag_x_up  = sqrt(pow(means[2][0]+calib.ax_off,2)+pow(means[2][1]+calib.ay_off,2)+pow(means[2][2]+calib.az_off,2));
-  float mag_z_up  = sqrt(pow(means[0][0]+calib.ax_off,2)+pow(means[0][1]+calib.ay_off,2)+pow(means[0][2]+calib.az_off,2));
-  Serial.print(F("  Kiem tra |a| sau calib (Pos1): ")); Serial.print(mag_z_up,4); Serial.println(F(" g"));
-  Serial.print(F("  Kiem tra |a| sau calib (Pos3): ")); Serial.print(mag_x_up,4); Serial.println(F(" g"));
+  // Kiểm tra |a| sau hiệu chỉnh (lý tưởng = 1.0 g)
+  float mag_z_up = sqrt(pow(means[0][0]+calib.ax_off,2)+pow(means[0][1]+calib.ay_off,2)+pow(means[0][2]+calib.az_off,2));
+  float mag_x_up = sqrt(pow(means[2][0]+calib.ax_off,2)+pow(means[2][1]+calib.ay_off,2)+pow(means[2][2]+calib.az_off,2));
+  Serial.print(F("  Kiem tra |a| sau calib (Pos1 - Z len): ")); Serial.print(mag_z_up,4); Serial.println(F(" g"));
+  Serial.print(F("  Kiem tra |a| sau calib (Pos3 - X len): ")); Serial.print(mag_x_up,4); Serial.println(F(" g"));
+
+  if (abs(mag_z_up-1.0f)<0.03f && abs(mag_x_up-1.0f)<0.03f)
+    Serial.println(F("  [OK] |a| sau calib trong gioi han 3%."));
+  else
+    Serial.println(F("  [!] |a| sau calib lech >3%. Kiem tra lai vi tri dat cam bien."));
 }
 
 // ================================================================
@@ -572,9 +586,10 @@ void task3_gravity() {
     wait_serial();
     delay(500);
 
-    // ── Một vòng lặp duy nhất: vừa in CSV vừa tích lũy tổng ──
-    Serial.println(F("#CSV"));
-    double sax = 0, say = 0, saz = 0;       // ← khai báo 1 lần duy nhất
+    // FIX: Nhất quán format CSV header
+    Serial.println(F("angle_deg,ax,ay,az"));
+
+    double sax = 0, say = 0, saz = 0;
     for (int j = 0; j < 200; j++) {
       read_sensor();
       Serial.print(angles[i], 1); Serial.print(",");
@@ -587,7 +602,6 @@ void task3_gravity() {
       delay(10);
     }
 
-    // Tóm tắt từ tổng đã tích lũy ở trên
     float ax  = sax / 200;
     float ay  = say / 200;
     float az  = saz / 200;
@@ -607,6 +621,7 @@ void task3_gravity() {
 
   Serial.println(F("\nBai 3 hoan tat. Gui '0' de ve menu."));
 }
+
 // ================================================================
 //  BAI 4: BỘ LỌC TÍN HIỆU
 // ================================================================
@@ -666,7 +681,7 @@ void task4_filter() {
     float roll_a  = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
     float pitch_a = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
 
-    // Complementary Filter
+    // Complementary Filter: angle = α*(angle + gyro*dt) + (1-α)*accel_angle
     cf_roll  = cf_alpha*(cf_roll  + imu.gx_dps*dt) + (1.0f-cf_alpha)*roll_a;
     cf_pitch = cf_alpha*(cf_pitch + imu.gy_dps*dt) + (1.0f-cf_alpha)*pitch_a;
 
@@ -677,14 +692,12 @@ void task4_filter() {
     Serial.print(millis());    Serial.print(',');
     Serial.print(roll_a,2);    Serial.print(',');
     Serial.print(pitch_a,2);   Serial.print(',');
-    // Complementary
     if (mode=='C'||mode=='B') {
       Serial.print(cf_roll,2); Serial.print(','); Serial.print(cf_pitch,2);
     } else {
       Serial.print(F("0,0"));
     }
     Serial.print(',');
-    // Kalman
     if (mode=='K'||mode=='B') {
       Serial.print(kf_roll_out,2); Serial.print(','); Serial.print(kf_pitch_out,2);
     } else {
@@ -712,22 +725,25 @@ void task5_shock() {
 
   if (mode == 'S') {
     // ---- SHOCK DETECTION MODE ----
-    Serial.println(F("\n[SHOCK DETECTION] Nguong: "));
-    Serial.print(SHOCK_THRESHOLD); Serial.println(F(" g tu 1g binh thuong"));
+    Serial.println(F("\n[SHOCK DETECTION]"));
+    Serial.print(F("Nguong: |a| - 1g > ")); Serial.print(SHOCK_THRESHOLD); Serial.println(F(" g"));
     Serial.println(F("Xuat: Time_ms,Ax,Ay,Az,Magnitude,SHOCK(0/1)"));
     Serial.println(F("Gui 'q' de dung.\n"));
     delay(500);
 
-    bool in_shock       = false;
-    unsigned long t_s   = 0;
-    float peak_g        = 0;
+    bool in_shock     = false;
+    unsigned long t_s = 0;
+    float peak_g      = 0;
 
-    // Cấu hình sample rate cao hơn cho shock: SMPLRT_DIV=1 → 500Hz
+    // Cấu hình sample rate cao cho shock: SMPLRT_DIV=1 → 500Hz
     mpu_write(REG_SMPLRT_DIV, 1);
     delay(50);
 
     while (true) {
       if (Serial.available()) { char c=Serial.read(); if(c=='q'||c=='Q') break; }
+
+      // FIX: Dùng micros() để giữ đúng khoảng thời gian 2ms (~500Hz)
+      unsigned long t0 = micros();
 
       read_sensor();
       float mag = sqrt(imu.ax_g*imu.ax_g + imu.ay_g*imu.ay_g + imu.az_g*imu.az_g);
@@ -758,7 +774,8 @@ void task5_shock() {
       Serial.print(mag,3);      Serial.print(',');
       Serial.println(is_shock ? 1 : 0);
 
-      delay(2); // ~500Hz
+      // FIX: Dùng busy-wait để đảm bảo fs = 500Hz chính xác hơn
+      while ((micros() - t0) < 2000UL);
     }
 
     // Khôi phục 100Hz
@@ -781,16 +798,23 @@ void task5_shock() {
     Serial.println(F("n=512"));
 
     for (int i = 0; i < 512; i++) {
+      unsigned long t0 = micros();
+
       uint8_t buf[6];
       mpu_read_burst(REG_ACCEL_XOUT_H, buf, 6);
       float ax = (int16_t)((buf[0]<<8)|buf[1]) / ACCEL_SCALE_2G;
       float ay = (int16_t)((buf[2]<<8)|buf[3]) / ACCEL_SCALE_2G;
       float az = (int16_t)((buf[4]<<8)|buf[5]) / ACCEL_SCALE_2G;
-      // FIX: áp dụng calibration offset trước khi tính magnitude
+
+      // Áp dụng calibration offset trước khi tính magnitude
       if (calib.done) { ax += calib.ax_off; ay += calib.ay_off; az += calib.az_off; }
-      float mag = sqrt(ax*ax+ay*ay+az*az) - 1.0f; // loại bỏ DC 1g
+
+      // Loại bỏ DC 1g (trọng trường) để chỉ giữ thành phần dao động
+      float mag = sqrt(ax*ax+ay*ay+az*az) - 1.0f;
       Serial.println(mag, 5);
-      delay(2);
+
+      // FIX: Dùng busy-wait để đảm bảo fs = 500Hz chính xác
+      while ((micros() - t0) < 2000UL);
     }
 
     Serial.println(F("SAMPLE_END"));
@@ -845,15 +869,15 @@ void task6_angles() {
 
     read_sensor();
 
-    // Góc từ accel
+    // Góc từ accel: roll = atan2(Ay, Az), pitch = atan2(-Ax, sqrt(Ay²+Az²))
     float roll_a  = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
     float pitch_a = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
 
-    // Tích phân gyro
+    // Tích phân gyro: roll += gx*dt, pitch += gy*dt, yaw += gz*dt
     roll_g  += imu.gx_dps * dt;
     pitch_g += imu.gy_dps * dt;
     yaw_g   += imu.gz_dps * dt;
-    yaw_kf  += imu.gz_dps * dt;  // Yaw drift, cần Mag để fix
+    yaw_kf  += imu.gz_dps * dt;   // Yaw drift – cần Magnetometer để fix
 
     // Kalman
     kf_roll_out  = kalman_update(&kf_roll,  roll_a,  imu.gx_dps, dt);
@@ -881,6 +905,7 @@ void task6_angles() {
 //         - Tự động hiệu chỉnh gyro khi khởi động
 //         - Kalman Filter cho Roll & Pitch
 //         - Phát hiện shock tự động
+//         - Giám sát nhiệt độ
 //         - Xuất CSV đầy đủ cho Serial Plotter
 // ================================================================
 void task7_summary() {
@@ -901,7 +926,7 @@ void task7_summary() {
   Serial.println(F("      Giu THIET BI YEN LANG trong 5 giay!"));
   delay(2000);
 
-  bool stable = false;
+  bool stable  = false;
   int  attempts = 0;
 
   while (!stable && attempts < 5) {
@@ -933,7 +958,16 @@ void task7_summary() {
       attempts++;
       Serial.print(F("  [!] Khong on dinh (STD=")); Serial.print(std_total,3);
       Serial.print(F("). Thu lai lan ")); Serial.println(attempts);
+      if (attempts < 5) {
+        Serial.println(F("      Giu yen thiet bi them 5 giay..."));
+        delay(2000);
+      }
     }
+  }
+
+  if (!stable) {
+    Serial.println(F("  [WARN] Khong the on dinh sau 5 lan thu. Su dung offset cuoi cung."));
+    calib.done = true;
   }
 
   // --- Bước 2: Khởi tạo góc ban đầu ---
@@ -964,7 +998,7 @@ void task7_summary() {
 
     read_sensor();
 
-    // Accel angles
+    // Góc từ accel
     float roll_a  = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
     float pitch_a = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
 
@@ -974,7 +1008,7 @@ void task7_summary() {
     yaw  += imu.gz_dps * dt;
 
     // Shock detection
-    float mag = sqrt(imu.ax_g*imu.ax_g+imu.ay_g*imu.ay_g+imu.az_g*imu.az_g);
+    float mag   = sqrt(imu.ax_g*imu.ax_g+imu.ay_g*imu.ay_g+imu.az_g*imu.az_g);
     bool  shock = (abs(mag-1.0f) > SHOCK_THRESHOLD);
 
     if (shock && !in_shock) {
@@ -988,12 +1022,12 @@ void task7_summary() {
     }
 
     // CSV output
-    Serial.print(millis());  Serial.print(',');
-    Serial.print(roll,2);    Serial.print(',');
-    Serial.print(pitch,2);   Serial.print(',');
-    Serial.print(yaw,2);     Serial.print(',');
+    Serial.print(millis());     Serial.print(',');
+    Serial.print(roll,2);       Serial.print(',');
+    Serial.print(pitch,2);      Serial.print(',');
+    Serial.print(yaw,2);        Serial.print(',');
     Serial.print(imu.temp_c,1); Serial.print(',');
-    Serial.print(mag,3);     Serial.print(',');
+    Serial.print(mag,3);        Serial.print(',');
     Serial.println(shock ? 1 : 0);
 
     delay(10);

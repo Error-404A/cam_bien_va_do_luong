@@ -1,6 +1,0 @@
-ax_off = -0.019916;  % g
-ay_off = +0.001152;  % g
-az_off = +0.057588;  % g
-gx_off = +0.400246;  % deg/s
-gy_off = -0.431773;  % deg/s
-gz_off = -0.246160;  % deg/s
