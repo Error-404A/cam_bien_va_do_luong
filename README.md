@@ -1,6 +1,6 @@
 # Đo lường, Hiệu chỉnh và Lọc tín hiệu Cảm biến Quán tính MPU6050
 
-> **Môn:** Kỹ thuật Cảm biến  
+> **Môn:** Cảm biến và đo lường cho Robot  
 > **Sinh viên:** Lê Quang Khải — MSSV: 20422878  
 > **Lớp:** RBE3042-2 — Nhóm: 14  
 > **Giảng viên:** TS. Vũ Quốc Tuấn  
