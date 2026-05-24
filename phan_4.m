@@ -1,20 +1,13 @@
-%% BAI 4 - BO LOC TIN HIEU - Complementary & Kalman Filter
-%  Du lieu: bai4_data.txt (xuat tu Arduino IDE)
-%  Cot: Time_ms, Roll_Accel, Pitch_Accel, Roll_CF, Pitch_CF, Roll_KF, Pitch_KF
-
 clc; clear; close all;
-
-%% 1. DOC DU LIEU
 data = readmatrix('bai4_data.txt', 'NumHeaderLines', 1);
 
-t       = data(:,1) / 1000;   % ms -> s
-roll_a  = data(:,2);           % goc Roll tu Accel (do)
-pitch_a = data(:,3);           % goc Pitch tu Accel (do)
-roll_cf = data(:,4);           % Roll qua Complementary Filter
-pitch_cf= data(:,5);           % Pitch qua Complementary Filter
-roll_kf = data(:,6);           % Roll qua Kalman Filter
-pitch_kf= data(:,7);           % Pitch qua Kalman Filter
-
+t       = data(:,1) / 1000; 
+roll_a  = data(:,2);
+pitch_a = data(:,3);
+roll_cf = data(:,4);
+pitch_cf= data(:,5);
+roll_kf = data(:,6);
+pitch_kf= data(:,7);
 N = length(t);
 fprintf('=== BAI 4: BO LOC TIN HIEU ===\n');
 fprintf('So mau: %d | Thoi gian: %.2f s\n\n', N, t(end));
@@ -40,7 +33,6 @@ fprintf('PITCH : CF giam %.1f%% | KF giam %.1f%%\n', ...
     (1 - std(pitch_kf)/std(pitch_a))*100);
 
 %% 4. PHAN TICH DRIFT GYRO
-%  Drift the hien qua su chenh lech tich luy cua KF so voi Accel
 drift_roll  = roll_kf(end)  - roll_kf(1);
 drift_pitch = pitch_kf(end) - pitch_kf(1);
 T_total = t(end) - t(1);
@@ -56,7 +48,6 @@ fprintf('Roll  : Max diff = %.4f deg | RMS diff = %.4f deg\n', max(abs(diff_roll
 fprintf('Pitch : Max diff = %.4f deg | RMS diff = %.4f deg\n', max(abs(diff_pitch)), rms(diff_pitch));
 
 %% 6. VE DO THI
-
 % --- Figure 1: Roll - So sanh 3 phuong phap ---
 figure('Name','BAI 4 - ROLL ANGLE COMPARISON','NumberTitle','off');
 subplot(2,1,1);

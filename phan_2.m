@@ -1,24 +1,11 @@
-% ================================================================
-%  BAI 2 - HIEU CHINH OFFSET (CALIBRATION)
-%  MPU6500 IMU - Ky Thuat Cam Bien
-% ================================================================
-%  Du lieu:
-%    bai2_gyro.txt   : 500 mau gyro khi cam bien yen lang
-%                      Format: gx,gy,gz
-%    bai2_accel_pos1.txt ... bai2_accel_pos6.txt
-%                    : 200 mau accel moi vi tri
-%                      Format: ax,ay,az
-% ================================================================
-
 clc; clear; close all;
 
-%% ======================================================
 %  PHAN A: HIEU CHINH GYROSCOPE
-%% ======================================================
 fprintf('=== BAI 2A: HIEU CHINH GYROSCOPE ===\n');
 
 file_gyro = 'bai2_gyro.txt';
 Gdata = readmatrix(file_gyro);
+Gdata = Gdata(~any(isnan(Gdata), 2), :);
 gx = Gdata(:,1); gy = Gdata(:,2); gz = Gdata(:,3);
 N  = length(gx);
 t  = (0:N-1)*0.01;
@@ -51,7 +38,7 @@ fig1 = figure('Name','Bai 2A - Hieu chinh Gyro','Position',[50 50 1200 500]);
 subplot(1,2,1);
 plot(t,gx,'r',t,gy,'g',t,gz,'b','LineWidth',0.8);
 hold on;
-yline(0,'k--','LineWidth',1.5);
+yline(0,'w--','LineWidth',1.5);
 xlabel('Thoi gian (s)'); ylabel('Van toc goc (deg/s)');
 title('Gyro TRUOC hieu chinh');
 legend('Gx','Gy','Gz'); grid on;
@@ -59,7 +46,7 @@ legend('Gx','Gy','Gz'); grid on;
 subplot(1,2,2);
 plot(t,gx_cal,'r',t,gy_cal,'g',t,gz_cal,'b','LineWidth',0.8);
 hold on;
-yline(0,'k--','LineWidth',1.5);
+yline(0,'w--','LineWidth',1.5);
 xlabel('Thoi gian (s)'); ylabel('Van toc goc (deg/s)');
 title('Gyro SAU hieu chinh');
 legend('Gx cal','Gy cal','Gz cal'); grid on;
@@ -67,9 +54,7 @@ legend('Gx cal','Gy cal','Gz cal'); grid on;
 sgtitle('BAI 2A - HIEU CHINH GYROSCOPE','FontWeight','bold');
 saveas(fig1,'bai2a_gyro_calib.png');
 
-%% ======================================================
 %  PHAN B: HIEU CHINH ACCELEROMETER (6-POSITION)
-%% ======================================================
 fprintf('=== BAI 2B: HIEU CHINH ACCELEROMETER (6-position) ===\n');
 
 pos_labels = {'Pos1: Z len (+Az)', 'Pos2: Z xuong (-Az)',...
@@ -79,11 +64,12 @@ pos_files  = {'bai2_accel_pos1.txt','bai2_accel_pos2.txt',...
               'bai2_accel_pos3.txt','bai2_accel_pos4.txt',...
               'bai2_accel_pos5.txt','bai2_accel_pos6.txt'};
 
-means = zeros(6,3); % [pos][ax,ay,az]
+means = zeros(6,3);
 all_ax = {}; all_ay = {}; all_az = {};
 
 for p = 1:6
     Adata = readmatrix(pos_files{p});
+    Adata = Adata(~any(isnan(Adata), 2), :);
     a = Adata(:,1); b = Adata(:,2); c = Adata(:,3);
     means(p,:) = [mean(a), mean(b), mean(c)];
     all_ax{p} = a; all_ay{p} = b; all_az{p} = c; %#ok<SAGROW>
@@ -92,10 +78,9 @@ for p = 1:6
 end
 
 % Tinh offset: offset = -(mean_up + mean_down)/2
-offset_ax = -(means(3,1) + means(4,1)) / 2;  % X: Pos3 up + Pos4 down
-offset_ay = -(means(5,2) + means(6,2)) / 2;  % Y: Pos5 up + Pos6 down
-offset_az = -(means(1,3) + means(2,3)) / 2;  % Z: Pos1 up + Pos2 down
-
+offset_ax = -(means(3,1) + means(4,1)) / 2;
+offset_ay = -(means(5,2) + means(6,2)) / 2;
+offset_az = -(means(1,3) + means(2,3)) / 2;
 fprintf('\n--- Offset Accelerometer ---\n');
 fprintf('  offset_ax = %+.5f g\n', offset_ax);
 fprintf('  offset_ay = %+.5f g\n', offset_ay);
@@ -132,7 +117,7 @@ bar_data = [means(:,1), means(:,2), means(:,3)];
 bar(bar_data);
 set(gca,'XTickLabel',{'Z+','Z-','X+','X-','Y+','Y-'});
 hold on;
-yline(1,'k--'); yline(-1,'k--');
+yline(1,'w--'); yline(-1,'w--');
 xlabel('Vi tri'); ylabel('Gia toc (g)');
 title('Mean Accel moi vi tri (TRUOC hieu chinh)');
 legend('Ax','Ay','Az'); grid on;
@@ -152,7 +137,7 @@ x = 1:6;
 plot(x, mag_before,'rs--','LineWidth',1.5,'MarkerSize',8,'DisplayName','Truoc calib');
 hold on;
 plot(x, mag_after,'bo-','LineWidth',1.5,'MarkerSize',8,'DisplayName','Sau calib');
-yline(1.0,'k--','1g','LineWidth',1.5);
+yline(1.0,'w--','1g','LineWidth',1.5);
 yline(1.03,'g:','LineWidth',1); yline(0.97,'g:','LineWidth',1);
 set(gca,'XTick',1:6,'XTickLabel',{'Z+','Z-','X+','X-','Y+','Y-'});
 xlabel('Vi tri'); ylabel('|a| (g)');
@@ -160,19 +145,25 @@ title('|a| truoc/sau hieu chinh (ly tuong = 1.0)');
 legend; grid on;
 
 % Phan bo raw vs calibrated Pos1 (Az)
-for p_show = [1, 3, 5]  % 3 truc
-    subplot(2,3, (p_show+3)/2 + 2); % rows 4,5,6
-    if p_show==1, idx_raw=3; idx_cal=3; % Az
-    elseif p_show==3, idx_raw=1; idx_cal=1; % Ax
-    else, idx_raw=2; idx_cal=2; end % Ay
-    raw_v = eval(sprintf('all_a%s{%d}',char('x'+idx_raw-1),p_show));
-    cal_v = raw_v + [offset_ax,offset_ay,offset_az](idx_cal);
+offsets = [offset_ax, offset_ay, offset_az];
+for p_show = [1, 3, 5]
+    subplot(2,3, (p_show+3)/2 + 2); 
+    
+    if p_show==1, idx_raw=3; idx_cal=3;
+    elseif p_show==3, idx_raw=1; idx_cal=1;
+    else, idx_raw=2; idx_cal=2; 
+    end 
+    
+    raw_v = eval(sprintf('all_a%s{%d}', char('x'+idx_raw-1), p_show));
+    cal_v = raw_v + offsets(idx_cal);
+    
     hold on;
-    histogram(raw_v,25,'FaceColor','r','FaceAlpha',0.5,'DisplayName','Raw');
-    histogram(cal_v,25,'FaceColor','b','FaceAlpha',0.5,'DisplayName','Calibrated');
+    histogram(raw_v, 25, 'FaceColor', 'r', 'FaceAlpha', 0.5, 'DisplayName', 'Raw');
+    histogram(cal_v, 25, 'FaceColor', 'b', 'FaceAlpha', 0.5, 'DisplayName', 'Calibrated');
+    
     axis_name = char('X'+idx_raw-1);
-    xlabel(sprintf('A%s (g)',axis_name)); ylabel('Count');
-    title(sprintf('%s - Truoc/Sau calib',pos_labels{p_show}));
+    xlabel(sprintf('A%s (g)', axis_name)); ylabel('Count');
+    title(sprintf('%s - Truoc/Sau calib', pos_labels{p_show}));
     legend; grid on;
 end
 

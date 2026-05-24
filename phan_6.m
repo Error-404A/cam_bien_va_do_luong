@@ -1,39 +1,20 @@
-%% BAI 6 - UOC LUONG GOC ROLL / PITCH / YAW
-%  Phan tich du lieu tu bai_6.txt (MPU6500, 100Hz, Kalman Filter)
-%  Cot: Time_ms, Roll_Accel, Pitch_Accel, Roll_Gyro, Pitch_Gyro, Yaw_Gyro, Roll_KF, Pitch_KF, Yaw_KF
-%
-%  Pha thuc nghiem (theo comment cuoi file):
-%   0-3s   : yen tinh
-%   3-5s   : roll tang len 45 do
-%   5-15s  : giu roll 45 do
-%   15-17s : roll ve 0
-%   20-22s : pitch tang 30 do
-%   22-27s : giu pitch 30 do
-%   27-29s : pitch ve 0
-%   29-35s : xoay Yaw (drift)
-
 clear; clc; close all;
-
-%% ===== 1. DOC DU LIEU =====
-% Doc file, bo qua cac dong bat dau bang '#' hoac chua chu
 fid = fopen('bai_6.txt', 'r');
 raw = textscan(fid, '%f%f%f%f%f%f%f%f%f', ...
     'Delimiter', ',', 'CommentStyle', '#', ...
-    'HeaderLines', 3);   % bo 3 dong header
+    'HeaderLines', 3);
 fclose(fid);
 
 t_ms    = raw{1};
-Ra      = raw{2};   % Roll_Accel
-Pa      = raw{3};   % Pitch_Accel
-Rg      = raw{4};   % Roll_Gyro
-Pg      = raw{5};   % Pitch_Gyro
-Yg      = raw{6};   % Yaw_Gyro
-Rkf     = raw{7};   % Roll_KF
-Pkf     = raw{8};   % Pitch_KF
-Ykf     = raw{9};   % Yaw_KF
-
-t = t_ms / 1000;    % doi sang giay
-
+Ra      = raw{2};
+Pa      = raw{3};
+Rg      = raw{4};
+Pg      = raw{5};
+Yg      = raw{6};
+Rkf     = raw{7};
+Pkf     = raw{8};
+Ykf     = raw{9};
+t = t_ms / 1000; 
 fprintf('Du lieu: %d mau | %.1f s | Fs = %.0f Hz\n', ...
     length(t), t(end)-t(1), 1/mean(diff(t)));
 
@@ -96,7 +77,6 @@ mask_ret = (t >= 15) & (t <= 20);
 t_ret    = t(mask_ret);
 R_ret    = Rkf(mask_ret);
 
-% Tim thoi diem goc < 1 do lan dau tien
 idx_conv = find(abs(R_ret) < 1.0, 1, 'first');
 if ~isempty(idx_conv)
     t_conv = t_ret(idx_conv) - 15;
@@ -147,16 +127,11 @@ for i = 1:length(ref_angles)
 end
 
 %% ===== 6. DANH GIA DO TRE (LATENCY) =====
-% Do tre = thoi gian tu khi batdau xoay den khi KF bat kip Accel
-% Xet pha roll tang (3-5s): tim khi Rkf = 0.5 * peak
 t_roll = t((t>=3) & (t<=6));
 R_roll_kf = Rkf((t>=3) & (t<=6));
 R_roll_ac = Ra((t>=3) & (t<=6));
-
-% Threshold 5 do
 idx_ac  = find(R_roll_ac > 5, 1, 'first');
 idx_kf  = find(R_roll_kf > 5, 1, 'first');
-
 if ~isempty(idx_ac) && ~isempty(idx_kf)
     latency_ms = (t_roll(idx_kf) - t_roll(idx_ac)) * 1000;
     fprintf('\n--- DO TRE (LATENCY) ---\n');
@@ -176,8 +151,7 @@ end
 mask_yaw = (t >= 29) & (t <= 35);
 yaw_start = Yg(find(mask_yaw, 1, 'first'));
 yaw_end   = Yg(find(mask_yaw, 1, 'last'));
-drift_rate = (yaw_end - yaw_start) / 6;  % do/s
-
+drift_rate = (yaw_end - yaw_start) / 6;
 fprintf('\n--- DRIFT YAW (29-35s, khong co Magnetometer) ---\n');
 fprintf('  Toc do drift         : %.3f do/s\n', drift_rate);
 fprintf('  Drift sau 6s         : %.2f do\n', yaw_end - yaw_start);

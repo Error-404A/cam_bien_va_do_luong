@@ -1,0 +1,152 @@
+Kết quả phần 1:
+=== BAI 1: DAC TINH TINH MPU6500 ===
+So mau: 500 | Thoi gian: 5.0 s
+
+[ACCELEROMETER] (don vi: g)
+  Mean : Ax=+0.01875  Ay=-0.01150  Az=+0.99233
+  STD  : Ax=0.002891  Ay=0.002646  Az=0.003067
+[GYROSCOPE] (don vi: deg/s)
+  Mean : Gx=+0.12481  Gy=-0.08755  Gz=+0.05265
+  STD  : Gx=0.017144  Gy=0.017464  Gz=0.016076
+[DANH GIA]
+  |a| trung binh = 0.99259 g  (ly tuong: 1.000)
+  Sai lech |a|   = 0.74%
+
+  [OK] Zero-offset Accel X,Y trong gioi han 5%g
+  [OK] Zero-offset Gyro chap nhan duoc
+  [OK] |a| trong gioi han 3%
+
+Kết quả phần 2:
+=== BAI 2A: HIEU CHINH GYROSCOPE ===
+  Offset Gx = +0.30949 deg/s  |  STD = 0.056284
+  Offset Gy = -0.19900 deg/s  |  STD = 0.058545
+  Offset Gz = +0.84702 deg/s  |  STD = 0.058356
+  [!] Mot so offset > 0.05 deg/s
+
+=== BAI 2B: HIEU CHINH ACCELEROMETER (6-position) ===
+  Pos1: Z len (+Az) -> Ax=-0.0179  Ay=-0.4752  Az=0.4878
+  Pos2: Z xuong (-Az) -> Ax=-0.0176  Ay=0.0249  Az=-1.0121
+  Pos3: X len (+Ax) -> Ax=0.9820  Ay=0.0252  Az=-0.0116
+  Pos4: X xuong (-Ax) -> Ax=-1.0181  Ay=0.0246  Az=-0.0121
+  Pos5: Y len (+Ay) -> Ax=-0.0175  Ay=1.0248  Az=-0.0120
+  Pos6: Y xuong (-Ay) -> Ax=-0.0178  Ay=-0.9757  Az=-0.0120
+
+--- Offset Accelerometer ---
+  offset_ax = +0.01806 g
+  offset_ay = -0.02457 g
+  offset_az = +0.26216 g
+
+--- Kiem tra |a| sau hieu chinh (ly tuong: 1.000 g) ---
+  Pos1: Z len (+Az) -> |a| = 1.1405 g  (sai lech 14.05%) [!]
+  Pos2: Z xuong (-Az) -> |a| = 0.7500 g  (sai lech 25.00%) [!]
+  Pos3: X len (+Ax) -> |a| = 1.0310 g  (sai lech 3.10%) [!]
+  Pos4: X xuong (-Ax) -> |a| = 1.0309 g  (sai lech 3.09%) [!]
+  Pos5: Y len (+Ay) -> |a| = 1.0311 g  (sai lech 3.11%) [!]
+  Pos6: Y xuong (-Ay) -> |a| = 1.0310 g  (sai lech 3.10%) [!]
+  [!] Co vi tri sai lech > 3%x
+
+Kết quả phần 3:
+=== BAI 3: ANH HUONG GIA TOC TRONG TRUONG ===
+
+Goc    | Ax_LT    Ay_LT    Az_LT    | Ax_do    Ay_do    Az_do    | |a|    | Sai lech
+--------------------------------------------------------------------------------
+0      | 0.000    0.000    1.000    | 0.001    -0.001   1.002    | 1.0016 | 0.16%
+15     | 0.259    0.000    0.966    | 0.261    0.001    0.965    | 0.9998 | 0.02%
+30     | 0.500    0.000    0.866    | 0.500    0.001    0.867    | 1.0006 | 0.06%
+45     | 0.707    0.000    0.707    | 0.708    -0.001   0.708    | 1.0018 | 0.18%
+60     | 0.866    0.000    0.500    | 0.865    0.001    0.499    | 0.9983 | 0.17%
+90     | 1.000    0.000    0.000    | 1.002    0.000    0.001    | 1.0017 | 0.17%
+
+--- DANH GIA ---
+[OK] Tat ca goc do: sai lech |a| < 3%
+
+Kết quả phần 4:
+=== BAI 4: BO LOC TIN HIEU ===
+So mau: 1800 | Thoi gian: 17.99 s
+
+--- THONG KE DU LIEU THO (Accel angle) ---
+Roll_Accel : Mean = -8.3598 deg | STD = 12.1598 deg
+Pitch_Accel: Mean = 3.3430 deg | STD = 5.5877 deg
+
+--- THONG KE SAU BO LOC ---
+Roll_CF    : Mean = -8.3491 deg | STD = 12.1141 deg
+Pitch_CF   : Mean = 3.1447 deg | STD = 5.5569 deg
+Roll_KF    : Mean = -8.3588 deg | STD = 13.7298 deg
+Pitch_KF   : Mean = 3.5803 deg | STD = 6.2150 deg
+
+--- HIEU QUA LOC (giam nhieu STD so voi Accel) ---
+ROLL  : CF giam 0.4% | KF giam -12.9%
+PITCH : CF giam 0.6% | KF giam -11.2%
+
+--- DRIFT GYRO (uoc tinh) ---
+Roll  drift tong: -0.0600 deg trong 17.99 s = -0.0033 deg/s
+Pitch drift tong: 0.9900 deg trong 17.99 s = 0.0550 deg/s
+
+--- SAI LECH GIUA CF VA KF ---
+Roll  : Max diff = 13.0700 deg | RMS diff = 5.4776 deg
+Pitch : Max diff = 6.5700 deg | RMS diff = 2.3405 deg
+
+=== BANG TONG HOP KET QUA BAI 4 ===
+Chi tieu        | Du lieu tho | Comp.Filter | Kalman Filter
+-------------------------------------------------------
+Roll STD (deg)  | 12.1598    | 12.1141    | 13.7298   
+Pitch STD (deg) | 5.5877     | 5.5569     | 6.2150    
+Chong drift     | Khong      | Tot        | Rat tot   
+Do phuc tap     | Toi thieu  | Thap       | Trung binh
+
+Kết quả phần 5:
+=== PHAN 1: SHOCK DETECTION ===
+So su kien shock phat hien: 2
+Shock#   t_bat_dau(ms) Bien_do_dinh(g)  Thoi_gian_xung(ms) Settling_time(ms)
+1        602.0        4.370            6.0                74.0            
+2        1202.0       6.145            10.0               112.0           
+
+=== PHAN 2: FFT ANALYSIS ===
+So mau doc duoc: 512  |  fs=500 Hz  |  T_total=1.024 s
+
+Top 5 thanh phan tan so:
+#     Tan so (Hz)   Bien do (g) 
+1     25.4          0.1121        *** TAN SO CHU DAO ***
+2     49.8          0.0508      
+3     9.8           0.0231      
+
+=== TONG KET BAI 5 ===
+--- SHOCK ---
+  Shock #1: Bien_do_dinh=4.370g | Xung=6ms | Settling=74ms
+            Tan so dao dong tu nhien ~10.4 Hz
+  Shock #2: Bien_do_dinh=6.145g | Xung=10ms | Settling=112ms
+            Tan so dao dong tu nhien ~8.8 Hz
+--- FFT ---
+  Tan so chu dao   : 25.4 Hz (bien do 0.1121 g)
+  Bac 2 (harmonic) : 49.8 Hz (bien do 0.0508 g)
+  Hieu qua LPF (fc=80Hz): Loai cac thanh phan > 80Hz
+Kết quả phần 6:
+--- ON DINH KHI GIU ROLL 45 do (5-15s) ---
+  Gia tri trung binh KF  : 44.999 do
+  Do lech khoi 45 do     : -0.001 do
+  STD (nhieu)            : 0.0588 do
+  Sai so dinh (max dev)  : 0.180 do
+  => RAT TOT (< 0.5 do)
+
+--- HOI TU VE 0 SAU KHI THA ROLL (bat dau t=15s) ---
+  Thoi gian hoi tu vao ±1 do : 1.96 s
+  => XUAT SAC (< 2s)
+
+--- SO SANH VOI GOC CHUAN ---
+Goc chuan    t_start      Mean_KF      Error(do)    Danh gia    
+0            1.0          -0.027       0.027        Rat tot     
+45           5.0          44.999       0.001        Rat tot     
+0            17.0         -0.009       0.009        Rat tot     
+30           22.0         30.017       0.017        Rat tot     
+0            27.0         15.078       15.078       Can check   
+
+--- DO TRE (LATENCY) ---
+  Accel vuot 5 do tai t = 3.180 s
+  KF vuot 5 do tai    t = 3.220 s
+  Do tre KF so Accel    : 40.0 ms
+  => CHAP NHAN DUOC (< 50ms)
+
+--- DRIFT YAW (29-35s, khong co Magnetometer) ---
+  Toc do drift         : 10.055 do/s
+  Drift sau 6s         : 60.33 do
+  Note: can Magnetometer de khoa Yaw

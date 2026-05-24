@@ -1,17 +1,5 @@
-% ================================================================
-%  BAI 3 - KHAO SAT ANH HUONG GIA TOC TRONG TRUONG
-%  MPU6500 IMU - Ky Thuat Cam Bien
-%  [FIXED] Doc file 1 file duy nhat, loc dong CSV hop le, dark theme
-% ================================================================
-
 clc; clear; close all;
-
 angles_list = [0, 15, 30, 45, 60, 90];
-
-%% ---- 1. DOC FILE - LOC CHI DONG CSV HOP LE ----
-% Khac phuc: readmatrix that bai vi file chua dong chu lan lon
-% Giai phap: doc tung dong, chi lay dong co dung 4 so cach nhau boi dau phay
-
 fid = fopen('bai3_data.txt', 'r');
 if fid == -1
     error('Khong mo duoc file bai3_data.txt. Kiem tra lai duong dan.');
@@ -42,7 +30,7 @@ az_meas = zeros(1,6);
 
 for i = 1:6
     ang = angles_list(i);
-    idx = abs(raw(:,1) - ang) < 0.5;   % FIX: tang dung sai len 0.5 de loc chinh xac hon
+    idx = abs(raw(:,1) - ang) < 0.5; 
     if sum(idx) == 0
         warning('Khong co du lieu cho goc %d do!', ang);
         continue
@@ -83,24 +71,19 @@ else
 end
 
 %% ---- 5. DARK THEME SETUP ----
-BG   = [0.10 0.10 0.10];   % nen do thi (xam toi)
-AX   = [0.15 0.15 0.15];   % nen axes
-FG   = [1.00 1.00 1.00];   % chu / tick mau trang
-GRID = [0.35 0.35 0.35];   % luoi mau xam nhat
-
-% Mau duong ke
-CLT  = [0.95 0.95 0.95];   % ly thuyet: trang (thay cho den)
-CRX  = [1.00 0.35 0.35];   % Ax do: do
-CGR  = [0.35 0.90 0.35];   % Ay do: xanh la
-CBL  = [0.35 0.65 1.00];   % Az do: xanh duong
-COR  = [1.00 0.70 0.10];   % |a| do: cam
-CGB  = [0.50 0.80 1.00];   % scatter
-
+BG   = [0.10 0.10 0.10];
+AX   = [0.15 0.15 0.15];
+FG   = [1.00 1.00 1.00];
+GRID = [0.35 0.35 0.35];
+CLT  = [0.95 0.95 0.95];
+CRX  = [1.00 0.35 0.35];
+CGR  = [0.35 0.90 0.35];
+CBL  = [0.35 0.65 1.00];
+COR  = [1.00 0.70 0.10];
+CGB  = [0.50 0.80 1.00];
 fig = figure('Name','Bai 3 - Anh huong gia toc trong truong', ...
              'Position',[50 50 1300 800], ...
-             'Color', BG);   % FIX: nen figure den
-
-% Ham tien ich: ap dark theme len 1 axes
+             'Color', BG); 
     function style_ax(ax, AX, FG, GRID)
         set(ax, 'Color', AX, ...
                 'XColor', FG, 'YColor', FG, 'ZColor', FG, ...
@@ -118,7 +101,6 @@ fig = figure('Name','Bai 3 - Anh huong gia toc trong truong', ...
     end
 
 %% ---- 6. VE DO THI ----
-
 % --- Ax ---
 ax1 = subplot(2,3,1);
 plot(angles_list, ax_theory, '--o', 'Color', CLT, 'LineWidth',1.5,'MarkerSize',8, ...
@@ -172,7 +154,6 @@ xlabel('Goc nghieng (do)'); ylabel('Sai lech |a| (%)');
 title('Sai lech so voi 1g ly tuong'); grid on;
 ylim([0, max(max(err_pct), 3)*1.4]);
 style_ax(ax5, AX, FG, GRID);
-% FIX: mau text cua yline label
 ax5.YAxis.Color = FG;
 
 % --- Vector gia toc 2D ---

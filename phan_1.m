@@ -1,24 +1,14 @@
-% ================================================================
-%  BAI 1 - DO LUONG CO BAN & DAC TINH TINH
-%  MPU6500 IMU - Ky Thuat Cam Bien
-% ================================================================
-
 clc; clear; close all;
 
-%% ---- 1. DOC DU LIEU ----
 filename = 'bai1_data.txt';
-
-% FIX: Doc thu cong, chi lay dong co dung 6 so, bo qua moi dong text
 fid = fopen(filename, 'r');
 data = [];
 while ~feof(fid)
     line = fgetl(fid);
     if ~ischar(line), break; end
     line = strtrim(line);
-    % Bo qua dong trong hoac dong khong co dau phay
     if isempty(line) || ~contains(line, ','), continue; end
     vals = str2double(strsplit(line, ','));
-    % Chi lay dong co dung 6 phan tu va khong co NaN
     if numel(vals) == 6 && ~any(isnan(vals))
         data(end+1, :) = vals; %#ok<AGROW>
     end
@@ -34,7 +24,7 @@ gx = data(:,4);  gy = data(:,5);  gz = data(:,6);
 N  = length(ax);
 t  = (0:N-1) * 0.01;
 
-fprintf('=== BAI 1: DAC TINH TINH MPU6500 ===\n');
+fprintf('=== BAI 1: DAC TINH TINH MPU6050 ===\n');
 fprintf('So mau: %d | Thoi gian: %.1f s\n\n', N, t(end));
 
 %% ---- 2. TINH MEAN & STD ----
@@ -69,9 +59,8 @@ if abs(mag_a-1)<0.03
 else
     fprintf('  [!] |a| lech >3%% -> can hieu chinh gain\n');
 end
-
 %% ---- 3. VE DO THI ----
-fig = figure('Name','Bai 1 - Dac tinh tinh MPU6500','NumberTitle','off',...
+fig = figure('Name','Bai 1 - Dac tinh tinh MPU6050','NumberTitle','off',...
              'Position',[50 50 1300 800]);
 
 % --- Plot Accelerometer ---
@@ -149,13 +138,13 @@ title(ax6, 'Bang tong ket dac tinh tinh', 'FontSize', 11, 'FontWeight', 'bold');
 
 nRow = size(labels,1);
 nCol = size(labels,2);
-colX = [0.02, 0.38, 0.70];   % vi tri x cua 3 cot (don vi normalized trong subplot)
-rowY = linspace(0.85, 0.05, nRow);  % vi tri y tu tren xuong
+colX = [0.02, 0.38, 0.70];
+rowY = linspace(0.85, 0.05, nRow); 
 
 for r = 1:nRow
     for c = 1:nCol
         fw = 'normal';
-        if r == 1, fw = 'bold'; end  % dong header in dam
+        if r == 1, fw = 'bold'; end 
         text(colX(c), rowY(r), labels{r,c}, ...
              'Units','normalized', 'Parent', ax6, ...
              'FontSize', 9, 'FontWeight', fw, ...
@@ -164,8 +153,7 @@ for r = 1:nRow
     end
 end
 
-sgtitle('BAI 1 - DAC TINH TINH MPU6500', 'FontSize', 14, 'FontWeight', 'bold');
+sgtitle('BAI 1 - DAC TINH TINH MPU6050', 'FontSize', 14, 'FontWeight', 'bold');
 
-% FIX: Dung exportgraphics thay vi saveas de tranh loi UI component
 exportgraphics(fig, 'bai1_static.png', 'Resolution', 150);
 fprintf('\n[OK] Da luu bai1_static.png\n');

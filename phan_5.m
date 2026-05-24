@@ -1,23 +1,12 @@
-%% ================================================================
-%  BAI 5 - DO SHOCK & PHAN TICH DAO DONG - MPU6500
-%  Input : bai5_shock_data.txt  (shock detection, 500Hz)
-%          bai5_fft_data.txt    (vibration 512 mau, fs=500Hz)
-%  Output: 4 figure + ket qua in ra Command Window
-%% ================================================================
 clc; clear; close all;
-
-%% ================================================================
 %  PHAN 1: DOC VA XU LY DU LIEU SHOCK
-%% ================================================================
 fprintf('=== PHAN 1: SHOCK DETECTION ===\n');
 
 fid = fopen('bai5_shock_data.txt','r');
 time_ms=[]; Ax=[]; Ay=[]; Az=[]; Mag=[]; Shock_flag=[];
-
 while ~feof(fid)
     line = strtrim(fgetl(fid));
     if isempty(line), continue; end
-    % Bo qua dong header / comment (khong bat dau bang chu so hoac dau tru)
     if ~(line(1)=='-' || (line(1)>='0' && line(1)<='9')), continue; end
     parts = strsplit(line, ',');
     if numel(parts) < 6, continue; end
@@ -33,8 +22,6 @@ while ~feof(fid)
     end
 end
 fclose(fid);
-
-% Chuyen sang cot
 time_ms = time_ms(:); Ax=Ax(:); Ay=Ay(:); Az=Az(:);
 Mag=Mag(:); Shock_flag=Shock_flag(:);
 
@@ -60,8 +47,8 @@ fprintf('So su kien shock phat hien: %d\n', n_event);
 fprintf('%-8s %-12s %-16s %-18s %-16s\n', ...
     'Shock#','t_bat_dau(ms)','Bien_do_dinh(g)','Thoi_gian_xung(ms)','Settling_time(ms)');
 
-QUIET = 1.0; % g binh thuong
-QUIET_BAND = 0.05; % +-5%
+QUIET = 1.0;
+QUIET_BAND = 0.05; 
 
 for k = 1:n_event
     s = shock_events(k).start_idx;
@@ -71,12 +58,9 @@ for k = 1:n_event
     t_start  = time_ms(s);
     t_end    = time_ms(e);
     pulse_ms = t_end - t_start;
-    
-    % Settling time: sau khi het shock, bao lau Mag ve [0.95, 1.05]
-    settle_ms = NaN;
+        settle_ms = NaN;
     for j = e+1:length(Mag)
         if abs(Mag(j) - QUIET) <= QUIET_BAND
-            % Kiem tra on dinh 10 mau lien tiep
             if j+9 <= length(Mag) && all(abs(Mag(j:j+9)-QUIET) <= QUIET_BAND)
                 settle_ms = time_ms(j) - t_end;
                 break;
@@ -88,13 +72,11 @@ for k = 1:n_event
     shock_events(k).t_start   = t_start;
     shock_events(k).pulse_ms  = pulse_ms;
     shock_events(k).settle_ms = settle_ms;
-    
-    % Tan so dao dong tu nhien (dem cuc tieu/cuc dai sau shock)
-    after = Mag(e+1:min(e+300,length(Mag)));
+        after = Mag(e+1:min(e+300,length(Mag)));
     t_after = time_ms(e+1:min(e+300,length(time_ms)));
     [~, locs] = findpeaks(after, 'MinPeakProminence', 0.02);
     if length(locs) >= 2
-        T_osc = mean(diff(t_after(locs)))*2/1000; % chu ky (s)
+        T_osc = mean(diff(t_after(locs)))*2/1000;
         f_nat = 1/T_osc;
     else
         f_nat = NaN;
@@ -110,8 +92,6 @@ figure('Name','Bai 5 - Shock Detection','NumberTitle','off','Position',[50 500 1
 hold on;
 plot(time_ms, Mag, 'b-', 'LineWidth', 1, 'DisplayName','|a| (g)');
 plot(time_ms, Az,  'Color',[0.2 0.7 0.2], 'LineWidth', 0.8, 'DisplayName','Az (g)');
-
-% To mau vung shock
 for k = 1:n_event
     s = shock_events(k).start_idx;
     e = shock_events(k).end_idx;
@@ -135,9 +115,7 @@ figure('Name','Bai 5 - Chi tiet Shock','NumberTitle','off','Position',[50 50 110
 for k = 1:n_event
     subplot(1, n_event, k);
     s = shock_events(k).start_idx;
-    e = shock_events(k).end_idx;
-    
-    % Lay window: 50ms truoc, 200ms sau
+    e = shock_events(k).end_idx;    
     i0 = max(1,   find(time_ms >= time_ms(s)-50, 1));
     i1 = min(length(time_ms), find(time_ms >= time_ms(e)+200, 1));
     if isempty(i1), i1 = length(time_ms); end
@@ -160,9 +138,7 @@ for k = 1:n_event
 end
 sgtitle('Chi tiet tung su kien Shock');
 
-%% ================================================================
 %  PHAN 2: DOC DU LIEU FFT (512 mau, fs=500Hz)
-%% ================================================================
 fprintf('\n=== PHAN 2: FFT ANALYSIS ===\n');
 
 fid2 = fopen('bai5_fft_data.txt','r');
@@ -192,8 +168,6 @@ P2    = abs(Y/N);
 P1    = P2(1:floor(N/2)+1);
 P1(2:end-1) = 2*P1(2:end-1);
 f_axis = fs*(0:floor(N/2))/N;
-
-% Tim 3 dinh pho cao nhat
 [pks, locs_f] = findpeaks(P1, 'SortStr','descend', 'NPeaks', 5, 'MinPeakProminence', 0.005);
 fprintf('\nTop 5 thanh phan tan so:\n');
 fprintf('%-4s  %-12s  %-12s\n','#','Tan so (Hz)','Bien do (g)');
@@ -218,7 +192,6 @@ figure('Name','Bai 5 - FFT Spectrum','NumberTitle','off','Position',[600 50 900 
 subplot(2,1,1);
 stem(f_axis, P1, 'b', 'MarkerSize', 3);
 hold on;
-% Danh dau cac dinh
 for i = 1:min(3,length(pks))
     stem(f_axis(locs_f(i)), P1(locs_f(i)), 'r', 'LineWidth', 2, 'MarkerSize', 6);
     text(f_axis(locs_f(i))+1, P1(locs_f(i)), ...
@@ -230,7 +203,6 @@ title(sprintf('Pho FFT - Tan so chu dao: %.1f Hz', dominant_f));
 xlim([0 250]); grid on;
 
 subplot(2,1,2);
-% So sanh truoc/sau loc (Low-Pass, fc = 80Hz)
 fc_lpf = 80;
 [b_lpf, a_lpf] = butter(4, fc_lpf/(fs/2), 'low');
 vib_filtered = filtfilt(b_lpf, a_lpf, vib_data);
@@ -248,9 +220,7 @@ xlabel('Tan so (Hz)'); ylabel('Bien do (g)');
 title('So sanh Pho FFT: Truoc va Sau Low-Pass Filter');
 legend('Location','northeast'); xlim([0 250]); grid on;
 
-%% ================================================================
 %  TONG KET KET QUA
-%% ================================================================
 fprintf('\n=== TONG KET BAI 5 ===\n');
 fprintf('--- SHOCK ---\n');
 for k = 1:n_event
