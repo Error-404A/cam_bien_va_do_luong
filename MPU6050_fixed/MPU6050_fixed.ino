@@ -1,13 +1,9 @@
 #include <Wire.h>
 #include <math.h>
 
-// ================================================================
-//  REGISTER MAP MPU6050
-// ================================================================
-#define MPU_ADDR           0x68    // AD0=GND -> 0x68 | AD0=VCC -> 0x69
-
+#define MPU_ADDR           0x68
 #define REG_SMPLRT_DIV     0x19
-#define REG_CONFIG         0x1A    // DLPF Config cho CA Accel va Gyro
+#define REG_CONFIG         0x1A
 #define REG_GYRO_CONFIG    0x1B
 #define REG_ACCEL_CONFIG   0x1C
 #define REG_INT_ENABLE     0x38
@@ -17,86 +13,57 @@
 #define REG_GYRO_XOUT_H    0x43
 #define REG_PWR_MGMT_1     0x6B
 #define REG_PWR_MGMT_2     0x6C
-#define REG_WHO_AM_I       0x75    // Dia chi thanh ghi WHO_AM_I (MPU6050 tra ve 0x68)
-
-// ================================================================
-//  SCALE FACTORS (Sensitivity Scale Factor)
-// ================================================================
-#define ACCEL_SCALE_2G    16384.0f   // +-2g  -> 16384 LSB/g
-#define ACCEL_SCALE_4G     8192.0f   // +-4g
-#define ACCEL_SCALE_8G     4096.0f   // +-8g
-#define GYRO_SCALE_250      131.0f   // +-250 deg/s -> 131 LSB/(deg/s)
-#define GYRO_SCALE_500       65.5f   // +-500 deg/s
-#define GYRO_SCALE_1000      32.8f   // +-1000 deg/s
-
+#define REG_WHO_AM_I       0x75
+#define ACCEL_SCALE_2G    16384.0f
+#define ACCEL_SCALE_4G     8192.0f
+#define ACCEL_SCALE_8G     4096.0f
+#define GYRO_SCALE_250      131.0f
+#define GYRO_SCALE_500       65.5f
+#define GYRO_SCALE_1000      32.8f 
 #define RAD_TO_DEG         57.2957795f
 #define DEG_TO_RAD          0.0174533f
-
-// ================================================================
-//  CAU TRUC DU LIEU
-// ================================================================
-
-// Du lieu cam bien tuc thoi
 struct SensorData {
   int16_t ax_raw, ay_raw, az_raw;
   int16_t gx_raw, gy_raw, gz_raw;
   int16_t temp_raw;
-  float   ax_g,  ay_g,  az_g;       // quy ve g
-  float   gx_dps, gy_dps, gz_dps;   // do/giay
-  float   temp_c;                   // nhiet do deg C
+  float   ax_g,  ay_g,  az_g;
+  float   gx_dps, gy_dps, gz_dps;
+  float   temp_c;
 };
-
-// Thong so hieu chinh
 struct CalibData {
-  float ax_off, ay_off, az_off;      // offset accel (g)
-  float gx_off, gy_off, gz_off;      // offset gyro (deg/s)
+  float ax_off, ay_off, az_off;
+  float gx_off, gy_off, gz_off;
   bool  done;
 };
-
-// Kalman 1D (cho mot truc goc)
 struct KalmanFilter {
-  float angle;        // goc uoc luong
-  float bias;         // uoc luong bias gyro
-  float P[2][2];      // ma tran hiep phuong sai
-  float Q_angle;      // nhieu qua trinh - goc
-  float Q_bias;       // nhieu qua trinh - bias
-  float R_measure;    // nhieu do luong (accel)
+  float angle;
+  float bias;
+  float P[2][2];
+  float Q_angle;
+  float Q_bias;
+  float R_measure;
 };
-
-// ================================================================
-//  BIEN TOAN CUC
-// ================================================================
 SensorData  imu;
-CalibData   calib      = {0,0,0, 0,0,0, false};
-KalmanFilter kf_roll   = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
-KalmanFilter kf_pitch  = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
+CalibData   calib = {0,0,0, 0,0,0, false};
+KalmanFilter kf_roll = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
+KalmanFilter kf_pitch = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
 
-float cf_alpha         = 0.98f;
-float cf_roll          = 0.0f;
-float cf_pitch         = 0.0f;
-float kf_roll_out      = 0.0f;
-float kf_pitch_out     = 0.0f;
+float cf_alpha = 0.98f;
+float cf_roll = 0.0f;
+float cf_pitch = 0.0f;
+float kf_roll_out = 0.0f;
+float kf_pitch_out = 0.0f;
 
-unsigned long last_us  = 0;
-float dt               = 0.01f;
+unsigned long last_us = 0;
+float dt = 0.01f;
 
-// Shock detection
-#define SHOCK_THRESHOLD  2.0f      // g (nguong phat hien shock, lenh chenh so voi 1g)
-
-// ================================================================
-//  HAM I2C CO BAN
-// ================================================================
-
-// [FIX #1] Da them Wire.write(data) - truoc do bien 'data' khong bao gio duoc gui
+#define SHOCK_THRESHOLD  2.0f
 void mpu_write(uint8_t reg, uint8_t data) {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(reg);
-  Wire.write(data);   // <-- FIX: dong nay bi thieu trong phien ban cu, khien
-                      //          toan bo cau hinh (DLPF, sample rate, dai do)
-                      //          khong duoc nap vao chip
+  Wire.write(data);
   Wire.endTransmission();
 }
-
 uint8_t mpu_read_byte(uint8_t reg) {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(reg);
@@ -104,8 +71,6 @@ uint8_t mpu_read_byte(uint8_t reg) {
   Wire.requestFrom((uint8_t)MPU_ADDR, (uint8_t)1, (uint8_t)true);
   return Wire.available() ? Wire.read() : 0;
 }
-
-// Doc len byte lien tiep tu reg vao buf[]
 void mpu_read_burst(uint8_t reg, uint8_t* buf, uint8_t len) {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(reg);
@@ -115,55 +80,26 @@ void mpu_read_burst(uint8_t reg, uint8_t* buf, uint8_t len) {
     buf[i] = Wire.available() ? Wire.read() : 0;
   }
 }
-
-// ================================================================
-//  KHOI TAO MPU6050
-// ================================================================
 void mpu_setup() {
-  // Kiem tra WHO_AM_I
   uint8_t who = mpu_read_byte(REG_WHO_AM_I);
   Serial.print(F("WHO_AM_I = 0x")); Serial.println(who, HEX);
-
-  // [FIX #2] Sua lai nhan dien WHO_AM_I cho dung voi MPU6050:
-  //   - MPU6050 tra ve 0x68 (gia tri dung, da xac nhan theo datasheet)
-  //   - 0x70 la WHO_AM_I cua MPU6500, KHONG phai MPU6050
-  //   - 0x71 la WHO_AM_I cua MPU9250
-  if      (who == 0x68) Serial.println(F("Cam bien: MPU6050 - OK"));
-  else if (who == 0x70) Serial.println(F("[WARN] WHO_AM_I=0x70: Day la MPU6500, khong phai MPU6050!"));
-  else if (who == 0x71) Serial.println(F("[WARN] WHO_AM_I=0x71: Day la MPU9250, khong phai MPU6050!"));
-  else                  Serial.println(F("[WARN] WHO_AM_I khong nhan ra, kiem tra ket noi I2C..."));
-
-  // Reset chip
+  if(who == 0x68) Serial.println(F("Cam bien: MPU6050 - OK"));
+  else if(who == 0x70) Serial.println(F("[WARN] WHO_AM_I=0x70: Day la MPU6500, khong phai MPU6050!"));
+  else if(who == 0x71) Serial.println(F("[WARN] WHO_AM_I=0x71: Day la MPU9250, khong phai MPU6050!"));
+  else Serial.println(F("[WARN] WHO_AM_I khong nhan ra, kiem tra ket noi I2C..."));
   mpu_write(REG_PWR_MGMT_1, 0x80);
   delay(150);
-
-  // Wake up + dung PLL clock
   mpu_write(REG_PWR_MGMT_1, 0x01);
   delay(50);
-
-  // DLPF Gyro & Accel: bandwidth ~44 Hz (CONFIG register = 3)
   mpu_write(REG_CONFIG, 0x03);
-
-  // Gyro: Full-Scale +-250 deg/s (GYRO_CONFIG = 0x00)
   mpu_write(REG_GYRO_CONFIG, 0x00);
-
-  // Accel: Full-Scale +-2g (ACCEL_CONFIG = 0x00)
   mpu_write(REG_ACCEL_CONFIG, 0x00);
-
-  // Sample Rate = 1000 / (1 + SMPLRT_DIV) = 100 Hz
   mpu_write(REG_SMPLRT_DIV, 9);
-
   Serial.println(F("MPU6050 OK: +-2g / +-250dps / 100Hz / DLPF 44Hz"));
 }
-
-// ================================================================
-//  DOC TAT CA 14 BYTE (Accel + Temp + Gyro)
-//  Tu dong ap dung offset neu calib.done == true
-// ================================================================
 void read_sensor() {
   uint8_t buf[14];
   mpu_read_burst(REG_ACCEL_XOUT_H, buf, 14);
-
   imu.ax_raw   = (int16_t)((buf[0]  << 8) | buf[1]);
   imu.ay_raw   = (int16_t)((buf[2]  << 8) | buf[3]);
   imu.az_raw   = (int16_t)((buf[4]  << 8) | buf[5]);
@@ -171,18 +107,13 @@ void read_sensor() {
   imu.gx_raw   = (int16_t)((buf[8]  << 8) | buf[9]);
   imu.gy_raw   = (int16_t)((buf[10] << 8) | buf[11]);
   imu.gz_raw   = (int16_t)((buf[12] << 8) | buf[13]);
-
-  // Quy doi sang don vi vat ly
   imu.ax_g    = imu.ax_raw / ACCEL_SCALE_2G;
   imu.ay_g    = imu.ay_raw / ACCEL_SCALE_2G;
   imu.az_g    = imu.az_raw / ACCEL_SCALE_2G;
   imu.gx_dps  = imu.gx_raw / GYRO_SCALE_250;
   imu.gy_dps  = imu.gy_raw / GYRO_SCALE_250;
   imu.gz_dps  = imu.gz_raw / GYRO_SCALE_250;
-
   imu.temp_c  = (imu.temp_raw / 340.0f) + 36.53f;
-
-  // Ap dung offset hieu chinh
   if (calib.done) {
     imu.ax_g   += calib.ax_off;
     imu.ay_g   += calib.ay_off;
@@ -192,29 +123,19 @@ void read_sensor() {
     imu.gz_dps -= calib.gz_off;
   }
 }
-
-// ================================================================
-//  KALMAN FILTER 1D - CAP NHAT MOT TRUC
-// ================================================================
 float kalman_update(KalmanFilter* kf, float accel_angle, float gyro_rate, float dt_s) {
-  // --- Buoc Predict (Du bao) ---
   float rate  = gyro_rate - kf->bias;
   kf->angle  += dt_s * rate;
-
   kf->P[0][0] += dt_s * (dt_s * kf->P[1][1] - kf->P[0][1] - kf->P[1][0] + kf->Q_angle);
   kf->P[0][1] -= dt_s * kf->P[1][1];
   kf->P[1][0] -= dt_s * kf->P[1][1];
   kf->P[1][1] += kf->Q_bias * dt_s;
-
-  // --- Buoc Update (Cap nhat tu Accel) ---
   float S  = kf->P[0][0] + kf->R_measure;
   float K0 = kf->P[0][0] / S;
   float K1 = kf->P[1][0] / S;
-
   float y  = accel_angle - kf->angle;
   kf->angle += K0 * y;
   kf->bias  += K1 * y;
-
   float P00_tmp = kf->P[0][0];
   float P01_tmp = kf->P[0][1];
   kf->P[0][0] -= K0 * P00_tmp;
@@ -224,14 +145,8 @@ float kalman_update(KalmanFilter* kf, float accel_angle, float gyro_rate, float 
 
   return kf->angle;
 }
-
-// ================================================================
-//  MENU CHINH
-// ================================================================
 void print_menu() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("     MPU6050 - KY THUAT CAM BIEN       "));
-  Serial.println(F("========================================"));
   Serial.println(F(" 1 - Bai 1 : Do luong co ban & Dac tinh tinh"));
   Serial.println(F(" 2 - Bai 2 : Hieu chinh Offset (Calibration)"));
   Serial.println(F(" 3 - Bai 3 : Anh huong gia toc trong truong"));
@@ -240,15 +155,10 @@ void print_menu() {
   Serial.println(F(" 6 - Bai 6 : Uoc luong goc Roll/Pitch/Yaw"));
   Serial.println(F(" 7 - Bai 7 : Bai tap tong hop"));
   Serial.println(F(" 0 - Hien thi lai menu"));
-  Serial.println(F("========================================"));
   Serial.print(F("Calib: "));
   Serial.println(calib.done ? F("[CO] - Da hieu chinh") : F("[CHUA] - Chua hieu chinh"));
   Serial.println(F("Gui so 1-7 de chon bai:"));
 }
-
-// ================================================================
-//  TIEN ICH: doi ky tu tu Serial
-// ================================================================
 char wait_serial() {
   while (!Serial.available()) delay(20);
   char c = (char)Serial.read();
@@ -260,14 +170,8 @@ void flush_serial() {
   delay(10);
   while (Serial.available()) Serial.read();
 }
-
-// ================================================================
-//  BAI 1: DO LUONG CO BAN & DAC TINH TINH
-// ================================================================
 void task1_static() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("  BAI 1: DO LUONG CO BAN & DAC TINH TINH"));
-  Serial.println(F("========================================"));
   Serial.println(F("Dat cam bien nam yen tren mat phang bang."));
   Serial.println(F("Dang chuan bi lay 500 mau (khong di chuyen)..."));
   delay(3000);
@@ -337,34 +241,25 @@ void task1_static() {
   Serial.print(F("  |a| tong = ")); Serial.print(mag,5);
   Serial.print(F(" g  (ly tuong: 1.000 g)  Sai lech: "));
   Serial.print(abs(mag-1.0f)*100,2); Serial.println(F("%"));
-
   if (abs(m_ax) < 0.05f && abs(m_ay) < 0.05f)
     Serial.println(F("  [OK] Zero-offset Accel X,Y trong gioi han."));
   else
     Serial.println(F("  [!] Zero-offset Accel lon, can hieu chinh (Bai 2)."));
-
   if (abs(m_gx)<0.5f && abs(m_gy)<0.5f && abs(m_gz)<0.5f)
     Serial.println(F("  [OK] Zero-offset Gyro chap nhan duoc."));
   else
     Serial.println(F("  [!] Gyro offset lon, can hieu chinh (Bai 2)."));
-
   if (abs(mag-1.0f) < 0.03f)
     Serial.println(F("  [OK] |a| trong gioi han 3%."));
   else
     Serial.println(F("  [!] |a| lech >3%! Can hieu chinh gain Accel."));
-
   Serial.println(F("\nBai 1 hoan tat. Gui '0' de ve menu."));
 }
-
-// ================================================================
-//  BAI 2A: HIEU CHINH GYROSCOPE (Static - 5 giay)
-// ================================================================
 void task2_calib_gyro() {
   Serial.println(F("\n[2A] HIEU CHINH GYROSCOPE"));
   Serial.println(F("Dat cam bien YEN LANG hoan toan trong 5 giay..."));
   Serial.println(F("Nhan phim bat ky de bat dau:"));
   wait_serial();
-
   const int N = 500;
   double sgx=0,sgy=0,sgz=0;
   double sq_gx=0,sq_gy=0,sq_gz=0;
@@ -407,14 +302,10 @@ void task2_calib_gyro() {
   calib.done = true;
 }
 
-// ================================================================
-//  BAI 2B: HIEU CHINH ACCEL 6-POSITION
-// ================================================================
 void task2_calib_accel_6pos() {
   Serial.println(F("\n[2B] HIEU CHINH ACCELEROMETER (6-position method)"));
   Serial.println(F("Chuan bi 6 vi tri cam bien, moi vi tri lay 200 mau."));
   Serial.println(F("Bam phim bat ky de chuyen sang vi tri tiep theo.\n"));
-
   const char* pos_labels[6] = {
     "Pos 1 - Z HUONG LEN   (mat cam bien nhin len tran)  -> Az ~ +1g",
     "Pos 2 - Z HUONG XUONG (lat nguoc, mat nhin xuong)   -> Az ~ -1g",
@@ -423,19 +314,15 @@ void task2_calib_accel_6pos() {
     "Pos 5 - Y HUONG LEN   (dau truc Y nhin len tran)    -> Ay ~ +1g",
     "Pos 6 - Y HUONG XUONG (dau truc Y nhin xuong dat)   -> Ay ~ -1g"
   };
-
   float means[6][3];
   const int N = 200;
-
   for (int pos = 0; pos < 6; pos++) {
     Serial.println();
     Serial.println(pos_labels[pos]);
     Serial.println(F(">> Dat dung vi tri roi nhan phim bat ky:"));
     wait_serial();
     delay(500);
-
     Serial.println(F("ax,ay,az"));
-
     double sax=0,say=0,saz=0;
     for (int i = 0; i < N; i++) {
       uint8_t buf[6];
@@ -443,7 +330,6 @@ void task2_calib_accel_6pos() {
       float ax = (int16_t)((buf[0]<<8)|buf[1]) / ACCEL_SCALE_2G;
       float ay = (int16_t)((buf[2]<<8)|buf[3]) / ACCEL_SCALE_2G;
       float az = (int16_t)((buf[4]<<8)|buf[5]) / ACCEL_SCALE_2G;
-
       sax += ax; say += ay; saz += az;
       Serial.print(ax, 4); Serial.print(',');
       Serial.print(ay, 4); Serial.print(',');
@@ -457,8 +343,6 @@ void task2_calib_accel_6pos() {
     Serial.print(F("  Ay=")); Serial.print(means[pos][1],4);
     Serial.print(F("  Az=")); Serial.println(means[pos][2],4);
   }
-
-  // offset = -(mean_positive + mean_negative) / 2
   calib.ax_off = -(means[2][0] + means[3][0]) / 2.0f;
   calib.ay_off = -(means[4][1] + means[5][1]) / 2.0f;
   calib.az_off = -(means[0][2] + means[1][2]) / 2.0f;
@@ -479,14 +363,8 @@ void task2_calib_accel_6pos() {
   else
     Serial.println(F("  [!] |a| sau calib lech >3%. Kiem tra lai vi tri dat cam bien."));
 }
-
-// ================================================================
-//  BAI 2: HIEU CHINH TONG HOP
-// ================================================================
 void task2_calibrate() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("  BAI 2: HIEU CHINH OFFSET (CALIBRATION)"));
-  Serial.println(F("========================================"));
   Serial.println(F("Chon loai hieu chinh:"));
   Serial.println(F("  G - Chi hieu chinh Gyroscope (nam yen)"));
   Serial.println(F("  A - Chi hieu chinh Accelerometer (6-position)"));
@@ -500,19 +378,12 @@ void task2_calibrate() {
   Serial.println(F("\n[OK] Hieu chinh hoan tat. Tat ca bai tiep theo se su dung offset nay."));
   Serial.println(F("Gui '0' de ve menu."));
 }
-
-// ================================================================
-//  BAI 3: KHAO SAT ANH HUONG GIA TOC TRONG TRUONG
-// ================================================================
 void task3_gravity() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("  BAI 3: ANH HUONG GIA TOC TRONG TRUONG"));
-  Serial.println(F("========================================"));
   Serial.println(F("Quy tac: Ax = sin(pitch), Az = cos(pitch), Ay ~ 0 khi chi nghieng theo X"));
   Serial.println(F("\nBang ly thuyet (nghieng theo truc X - Pitch):"));
   Serial.println(F(" Goc |  Ax(g) |  Ay(g) |  Az(g) | |a|(g)"));
   Serial.println(F("-----|--------|--------|--------|-------"));
-
   float theory[][4] = {
     {0,    0.000f, 0, 1.000f},
     {15,   0.259f, 0, 0.966f},
@@ -575,14 +446,8 @@ void task3_gravity() {
 
   Serial.println(F("\nBai 3 hoan tat. Gui '0' de ve menu."));
 }
-
-// ================================================================
-//  BAI 4: BO LOC TIN HIEU
-// ================================================================
 void task4_filter() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("  BAI 4: BO LOC TIN HIEU"));
-  Serial.println(F("========================================"));
   Serial.println(F("Chon che do:"));
   Serial.println(F("  C - Complementary Filter"));
   Serial.println(F("  K - Kalman Filter"));
@@ -603,13 +468,10 @@ void task4_filter() {
     Serial.print(F("  Dung alpha mac dinh = ")); Serial.println(cf_alpha);
   }
 
-  // Reset bo loc
   cf_roll = cf_pitch = 0;
   kf_roll   = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
   kf_pitch  = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
   last_us = micros();
-
-  // Khoi tao goc tu accel
   read_sensor();
   cf_roll     = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
   cf_pitch    = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
@@ -662,14 +524,8 @@ void task4_filter() {
 
   Serial.println(F("\nBai 4 dung. Gui '0' de ve menu."));
 }
-
-// ================================================================
-//  BAI 5: DO SHOCK & PHAN TICH DAO DONG
-// ================================================================
 void task5_shock() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("  BAI 5: DO SHOCK & PHAN TICH DAO DONG"));
-  Serial.println(F("========================================"));
   Serial.println(F("Chon che do:"));
   Serial.println(F("  S - Shock detection (phat hien va cham real-time)"));
   Serial.println(F("  V - Vibration sampling 512 mau @ 500Hz (cho MATLAB FFT)"));
@@ -770,14 +626,8 @@ void task5_shock() {
 
   Serial.println(F("\nBai 5 dung. Gui '0' de ve menu."));
 }
-
-// ================================================================
-//  BAI 6: UOC LUONG GOC ROLL / PITCH / YAW
-// ================================================================
 void task6_angles() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("  BAI 6: UOC LUONG GOC ROLL / PITCH / YAW"));
-  Serial.println(F("========================================"));
   Serial.println(F("Phuong phap:"));
   Serial.println(F("  Roll, Pitch: Kalman Filter (Accel + Gyro)"));
   Serial.println(F("  Yaw        : Tich phan Gyro (drift theo thoi gian)"));
@@ -833,14 +683,8 @@ void task6_angles() {
 
   Serial.println(F("\nBai 6 dung. Gui '0' de ve menu."));
 }
-
-// ================================================================
-//  BAI 7: BAI TAP TONG HOP
-// ================================================================
 void task7_summary() {
-  Serial.println(F("\n========================================"));
   Serial.println(F("  BAI 7: BAI TAP TONG HOP"));
-  Serial.println(F("========================================"));
   Serial.println(F("He thong giam sat IMU day du:"));
   Serial.println(F("  [1] Tu dong hieu chinh Gyro khi khoi dong (5s)"));
   Serial.println(F("  [2] Kalman Filter cho Roll & Pitch"));
@@ -957,17 +801,13 @@ void task7_summary() {
 
   Serial.println(F("\nBai 7 dung. Gui '0' de ve menu."));
 }
-
-// ================================================================
-//  SETUP & LOOP
-// ================================================================
 void setup() {
   Serial.begin(115200);
   Wire.begin();
   Wire.setClock(400000L);   // I2C Fast Mode 400kHz
   delay(500);
 
-  Serial.println(F("\n=== MPU6050 LAB - KY THUAT CAM BIEN ==="));
+  Serial.println(F("\n MPU6050 LAB - KY THUAT CAM BIEN"));
   mpu_setup();
   print_menu();
 }
