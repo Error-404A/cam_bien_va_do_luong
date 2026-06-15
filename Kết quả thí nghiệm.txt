@@ -18,31 +18,31 @@ So mau: 500 | Thoi gian: 5.0 s
 
 Kết quả phần 2:
 === BAI 2A: HIEU CHINH GYROSCOPE ===
-  Offset Gx = +0.31649 deg/s  |  STD = 0.047816
-  Offset Gy = -0.18189 deg/s  |  STD = 0.050482
-  Offset Gz = +0.24937 deg/s  |  STD = 0.046076
+  Offset Gx = +0.31960 deg/s  |  STD = 0.048819
+  Offset Gy = -0.18126 deg/s  |  STD = 0.047891
+  Offset Gz = +0.25020 deg/s  |  STD = 0.050741
   [!] Mot so offset > 0.05 deg/s
 
 === BAI 2B: HIEU CHINH ACCELEROMETER (6-position) ===
-  Pos1: Z len (+Az) -> Ax=-0.0122  Ay=0.0079  Az=0.9851
-  Pos2: Z xuong (-Az) -> Ax=-0.0124  Ay=0.0081  Az=-1.0150
-  Pos3: X len (+Ax) -> Ax=0.9877  Ay=0.0079  Az=-0.0144
-  Pos4: X xuong (-Ax) -> Ax=-1.0124  Ay=0.0082  Az=-0.0148
-  Pos5: Y len (+Ay) -> Ax=-0.0122  Ay=1.0079  Az=-0.0151
-  Pos6: Y xuong (-Ay) -> Ax=-0.0122  Ay=-0.9918  Az=-0.0150
+  Pos1: Z len (+Az) -> Ax=-0.0306  Ay=0.0198  Az=0.9867
+  Pos2: Z xuong (-Az) -> Ax=-0.0174  Ay=0.0076  Az=-1.0150
+  Pos3: X len (+Ax) -> Ax=0.9902  Ay=0.0081  Az=-0.0391
+  Pos4: X xuong (-Ax) -> Ax=-1.0154  Ay=-0.0011  Az=-0.0184
+  Pos5: Y len (+Ay) -> Ax=-0.0006  Ay=1.0045  Az=-0.0205
+  Pos6: Y xuong (-Ay) -> Ax=0.0034  Ay=-0.9879  Az=-0.0077
 
 --- Offset Accelerometer ---
-  offset_ax = +0.01237 g
-  offset_ay = -0.00807 g
-  offset_az = +0.01493 g
+  offset_ax = +0.01262 g
+  offset_ay = -0.00827 g
+  offset_az = +0.01420 g
 
 --- Kiem tra |a| sau hieu chinh (ly tuong: 1.000 g) ---
-  Pos1: Z len (+Az) -> |a| = 1.0001 g  (sai lech 0.01%)
-  Pos2: Z xuong (-Az) -> |a| = 1.0001 g  (sai lech 0.01%)
-  Pos3: X len (+Ax) -> |a| = 1.0001 g  (sai lech 0.01%)
-  Pos4: X xuong (-Ax) -> |a| = 1.0001 g  (sai lech 0.01%)
-  Pos5: Y len (+Ay) -> |a| = 0.9999 g  (sai lech 0.01%)
-  Pos6: Y xuong (-Ay) -> |a| = 0.9999 g  (sai lech 0.01%)
+  Pos1: Z len (+Az) -> |a| = 1.0011 g  (sai lech 0.11%)
+  Pos2: Z xuong (-Az) -> |a| = 1.0009 g  (sai lech 0.09%)
+  Pos3: X len (+Ax) -> |a| = 1.0031 g  (sai lech 0.31%)
+  Pos4: X xuong (-Ax) -> |a| = 1.0029 g  (sai lech 0.29%)
+  Pos5: Y len (+Ay) -> |a| = 0.9963 g  (sai lech 0.37%)
+  Pos6: Y xuong (-Ay) -> |a| = 0.9964 g  (sai lech 0.36%)
 
   [OK] Tat ca vi tri sai lech < 3%
 
@@ -51,12 +51,12 @@ Kết quả phần 3:
 
 Goc    | Ax_LT    Ay_LT    Az_LT    | Ax_do    Ay_do    Az_do    | |a|    | Sai lech
 --------------------------------------------------------------------------------
-0      | 0.000    0.000    1.000    | 0.003    -0.002   1.011    | 1.0109 | 1.09%
-15     | 0.259    0.000    0.966    | 0.266    -0.002   0.982    | 1.0169 | 1.69%
-30     | 0.500    0.000    0.866    | 0.511    -0.002   0.882    | 1.0193 | 1.93%
-45     | 0.707    0.000    0.707    | 0.719    -0.002   0.718    | 1.0165 | 1.65%
-60     | 0.866    0.000    0.500    | 0.876    -0.002   0.506    | 1.0115 | 1.15%
-90     | 1.000    0.000    0.000    | 1.014    -0.002   0.002    | 1.0141 | 1.41%
+0      | 0.000    0.000    1.000    | 0.003    -0.014   1.011    | 1.0110 | 1.10%
+15     | 0.259    0.000    0.966    | 0.266    0.030    0.982    | 1.0174 | 1.74%
+30     | 0.500    0.000    0.866    | 0.511    -0.030   0.882    | 1.0197 | 1.97%
+45     | 0.707    0.000    0.707    | 0.719    0.003    0.718    | 1.0165 | 1.65%
+60     | 0.866    0.000    0.500    | 0.876    0.045    0.506    | 1.0125 | 1.25%
+90     | 1.000    0.000    0.000    | 1.014    0.047    0.002    | 1.0151 | 1.51%
 
 --- DANH GIA ---
 [OK] Tat ca goc do: sai lech |a| < 3%
@@ -122,75 +122,21 @@ Top 3 thanh phan tan so:
   Bac 2 (harmonic) : 70.3 Hz (bien do 0.0514 g)
   Hieu qua LPF (fc=80Hz): Loai cac thanh phan > 80Hz
 Kết quả phần 6:
-========================================
-  DU LIEU BAI 6
-========================================
-  So mau          : 3500
-  Thoi gian tong  : 34.99 s
-  Tan so lay mau  : 100.0 Hz
-  dt trung binh   : 10.00 ms
+========== THONG KE ==========
+DRIFT GYRO:
+  Roll  Gyro drift rate : -0.0361 deg/s (-2.17 deg/phut)
+  Pitch Gyro drift rate : 0.1381 deg/s (8.29 deg/phut)
+  Yaw   total drift     : 4.37 deg trong 120.0s
 
-========================================
-  PHAN TICH ROLL
-========================================
+RMSE SO VIET KF (tham chieu):
+  Roll  - Accel : 11.120 deg | Gyro : 29.202 deg | CF : 5.476 deg
+  Pitch - Accel : 9.463 deg | Gyro : 17.706 deg | CF : 3.780 deg
 
-[ON DINH tai Roll = 45 do  (t = 5 - 15 s)]
-  Trung binh KF        : 44.9781 do
-  Sai so so voi 45 do  : -0.0219 do
-  STD (nhieu)          : 0.0700 do
-  Sai so dinh          : 0.2800 do
-  => RAT TOT (< 0.5 do)
+NHIEU ACCEL (STD so KF):
+  Roll STD  : 11.120 deg
+  Pitch STD : 9.464 deg
 
-[HOI TU ve 0 sau khi tha Roll  (t = 17 - 20 s)]
-  Dat |Roll| < 1 do sau : 0.00 s
-  => XUAT SAC (< 2s)
-
-========================================
-  PHAN TICH PITCH
-========================================
-
-[ON DINH tai Pitch = 30 do  (t = 22 - 27 s)]
-  Trung binh KF        : 30.0006 do
-  Sai so so voi 30 do  : +0.0006 do
-  STD (nhieu)          : 0.0428 do
-  Sai so dinh          : 0.1100 do
-  => RAT TOT (< 0.5 do)
-
-[HOI TU ve 0 sau khi tha Pitch  (t = 29 - 35 s)]
-  Dat |Pitch| < 1 do sau : 0.00 s
-  => XUAT SAC (< 2s)
-
-========================================
-  DO TRE (LATENCY)
-========================================
-  Accel vuot 5 do : t = 3.170 s
-  KF    vuot 5 do : t = 3.220 s
-  Do tre           : 50.0 ms
-  => CAO, xem lai Q/R
-
-========================================
-  DANH GIA YAW
-========================================
-  Drift rate : 0.018991 do/s  =  1.1395 do/phut
-  Tong drift : 0.1200 do / 6 s
-
-========================================
-  SO SANH VOI GOC CHUAN
-========================================
-Chuan(do)  Canh       t_start      t_end        Mean_KF      Sai so      
---------------------------------------------------------------------
-0          Roll       0.5          2.5          -0.0124      0.0124        Rat tot
-45         Roll       5.0          15.0         44.9781      0.0219        Rat tot
-0          Roll       17.0         20.0         -0.0043      0.0043        Rat tot
-0          Pitch      0.5          2.5          -0.0200      0.0200        Rat tot
-30         Pitch      22.0         27.0         30.0006      0.0006        Rat tot
-0          Pitch      29.0         35.0         0.0269       0.0269        Rat tot
-
-========================================
-  TOM TAT KET QUA BAI 6
-========================================
-  ROLL  – Sai so:-0.0219 do | STD:0.0700 do | Giam nhieu:5.4x
-  PITCH – Sai so:0.0006 do | STD:0.0428 do | Giam nhieu:7.2x
-  YAW   – Drift: 0.018991 do/s  (1.1395 do/phut)
-
-  => KET LUAN: DAT CHUAN RAT TOT (sai so < 0.5 do)
+GIA TOC TUYEN TINH (RMS, should~0 khi dung yen):
+  Ax_lin RMS : 0.1521 g
+  Ay_lin RMS : 0.1498 g
+  Az_lin RMS : 0.1453 g

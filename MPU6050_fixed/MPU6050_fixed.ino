@@ -1,6 +1,12 @@
+// ============================================================
+//  MPU6050 – Kỹ thuật Cảm biến
+//  Phần 1–7 đầy đủ | Phần 6 bổ sung bộ lọc tuyến tính (6.4)
+// ============================================================
+
 #include <Wire.h>
 #include <math.h>
 
+// ---------- Địa chỉ & thanh ghi ----------
 #define MPU_ADDR         0x68
 #define REG_SMPLRT_DIV   0x19
 #define REG_CONFIG       0x1A
@@ -15,6 +21,7 @@
 #define REG_PWR_MGMT_2   0x6C
 #define REG_WHO_AM_I     0x75
 
+// ---------- Hằng số scale ----------
 #define ACCEL_SCALE_2G   16384.0f
 #define ACCEL_SCALE_4G    8192.0f
 #define ACCEL_SCALE_8G    4096.0f
@@ -24,6 +31,15 @@
 #define RAD_TO_DEG        57.2957795f
 #define DEG_TO_RAD         0.0174533f
 #define SHOCK_THRESHOLD    2.0f
+
+// ---------- Hằng số bổ sung cho Phần 6.4 ----------
+#define G_ACCEL          9.81f    // m/s²
+#define HPF_ALPHA        0.95f    // High-pass filter: loại bỏ gia tốc trọng trường (thành phần DC)
+#define LPF_ALPHA_ACCEL  0.2f     // Low-pass filter: ước lượng vector trọng trường
+
+// ============================================================
+//  Cấu trúc dữ liệu
+// ============================================================
 
 struct SensorData {
   int16_t ax_raw, ay_raw, az_raw;
@@ -49,19 +65,45 @@ struct KalmanFilter {
   float R_measure;
 };
 
-SensorData  imu;
-CalibData   calib = {0,0,0, 0,0,0, false};
+// Phần 6.4 – Bộ lọc tách gia tốc tuyến tính khỏi trọng trường
+struct LinearAccelFilter {
+  float ax_hpf, ay_hpf, az_hpf;    // Đầu ra HPF: gia tốc tuyến tính (đã loại g)
+  float ax_prev, ay_prev, az_prev;  // Mẫu accel kỳ trước (dùng cho HPF)
+  float ax_lpf, ay_lpf, az_lpf;    // Đầu ra LPF: ước lượng vector trọng trường
+  float alpha_hpf;
+  float alpha_lpf;
+};
+
+// ============================================================
+//  Biến toàn cục
+// ============================================================
+
+SensorData   imu;
+CalibData    calib    = {0, 0, 0,  0, 0, 0,  false};
 KalmanFilter kf_roll  = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
 KalmanFilter kf_pitch = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
 
-float cf_alpha    = 0.98f;
-float cf_roll     = 0.0f;
-float cf_pitch    = 0.0f;
+// Phần 6.4
+LinearAccelFilter lin_accel = {
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0,
+  HPF_ALPHA,
+  LPF_ALPHA_ACCEL
+};
+
+float cf_alpha     = 0.98f;
+float cf_roll      = 0.0f;
+float cf_pitch     = 0.0f;
 float kf_roll_out  = 0.0f;
 float kf_pitch_out = 0.0f;
 
 unsigned long last_us = 0;
 float dt = 0.01f;
+
+// ============================================================
+//  Hàm giao tiếp I2C với MPU6050
+// ============================================================
 
 void mpu_write(uint8_t reg, uint8_t data) {
   Wire.beginTransmission(MPU_ADDR);
@@ -87,6 +129,10 @@ void mpu_read_burst(uint8_t reg, uint8_t* buf, uint8_t len) {
     buf[i] = Wire.available() ? Wire.read() : 0;
 }
 
+// ============================================================
+//  Khởi tạo MPU6050
+// ============================================================
+
 void mpu_setup() {
   uint8_t who = mpu_read_byte(REG_WHO_AM_I);
   Serial.print(F("WHO_AM_I = 0x")); Serial.println(who, HEX);
@@ -95,16 +141,20 @@ void mpu_setup() {
   else if (who == 0x71) Serial.println(F("WHO_AM_I=0x71: MPU9250"));
   else                  Serial.println(F("Khong nhan dien duoc, kiem tra I2C"));
 
-  mpu_write(REG_PWR_MGMT_1, 0x80);
+  mpu_write(REG_PWR_MGMT_1,  0x80);  // Reset
   delay(150);
-  mpu_write(REG_PWR_MGMT_1, 0x01);
+  mpu_write(REG_PWR_MGMT_1,  0x01);  // Dùng PLL gyro X làm clock
   delay(50);
-  mpu_write(REG_CONFIG,      0x03);
-  mpu_write(REG_GYRO_CONFIG, 0x00);
-  mpu_write(REG_ACCEL_CONFIG,0x00);
-  mpu_write(REG_SMPLRT_DIV,  9);
+  mpu_write(REG_CONFIG,      0x03);  // DLPF 44 Hz
+  mpu_write(REG_GYRO_CONFIG, 0x00);  // ±250 °/s
+  mpu_write(REG_ACCEL_CONFIG,0x00);  // ±2 g
+  mpu_write(REG_SMPLRT_DIV,  9);     // 100 Hz
   Serial.println(F("+-2g / +-250dps / 100Hz / DLPF 44Hz"));
 }
+
+// ============================================================
+//  Đọc cảm biến (có áp dụng calibration nếu đã calib)
+// ============================================================
 
 void read_sensor() {
   uint8_t buf[14];
@@ -136,9 +186,13 @@ void read_sensor() {
   }
 }
 
+// ============================================================
+//  Kalman Filter (dùng chung cho roll và pitch)
+// ============================================================
+
 float kalman_update(KalmanFilter* kf, float accel_angle, float gyro_rate, float dt_s) {
-  float rate = gyro_rate - kf->bias;
-  kf->angle += dt_s * rate;
+  float rate   = gyro_rate - kf->bias;
+  kf->angle   += dt_s * rate;
 
   kf->P[0][0] += dt_s * (dt_s * kf->P[1][1] - kf->P[0][1] - kf->P[1][0] + kf->Q_angle);
   kf->P[0][1] -= dt_s * kf->P[1][1];
@@ -163,6 +217,40 @@ float kalman_update(KalmanFilter* kf, float accel_angle, float gyro_rate, float 
   return kf->angle;
 }
 
+// ============================================================
+//  Phần 6.4 – Tách gia tốc tuyến tính khỏi trọng trường
+//  Sử dụng LPF để ước lượng g; HPF để trích xuất a_linear
+// ============================================================
+
+void estimate_linear_accel(LinearAccelFilter* f,
+                            float ax, float ay, float az) {
+  // LPF → ước lượng thành phần trọng trường (thành phần DC)
+  f->ax_lpf = f->alpha_lpf * f->ax_lpf + (1.0f - f->alpha_lpf) * ax;
+  f->ay_lpf = f->alpha_lpf * f->ay_lpf + (1.0f - f->alpha_lpf) * ay;
+  f->az_lpf = f->alpha_lpf * f->az_lpf + (1.0f - f->alpha_lpf) * az;
+
+  // HPF → gia tốc tuyến tính = tín hiệu đo - thành phần trọng trường
+  f->ax_hpf = f->alpha_hpf * (f->ax_hpf + ax - f->ax_prev);
+  f->ay_hpf = f->alpha_hpf * (f->ay_hpf + ay - f->ay_prev);
+  f->az_hpf = f->alpha_hpf * (f->az_hpf + az - f->az_prev);
+
+  f->ax_prev = ax;
+  f->ay_prev = ay;
+  f->az_prev = az;
+}
+
+// Bù ảnh hưởng vận tốc góc lên gia tốc đo được
+// a_centripetal = ω × (ω × r) → bù xấp xỉ qua đạo hàm ω
+float compensate_gyro_coupling(float a_hpf, float omega, float omega_prev, float dt_s) {
+  if (dt_s <= 0) return a_hpf;
+  float alpha = (omega - omega_prev) / dt_s;   // gia tốc góc (rad/s²)
+  return a_hpf - 0.1f * alpha;                  // hệ số bù thực nghiệm
+}
+
+// ============================================================
+//  Tiện ích Serial
+// ============================================================
+
 void print_menu() {
   Serial.println(F("--- MPU6050 ---"));
   Serial.println(F("1 - Do luong co ban"));
@@ -170,7 +258,7 @@ void print_menu() {
   Serial.println(F("3 - Anh huong gia toc trong truong"));
   Serial.println(F("4 - Bo loc (Complementary & Kalman)"));
   Serial.println(F("5 - Shock & FFT sampling"));
-  Serial.println(F("6 - Roll/Pitch/Yaw"));
+  Serial.println(F("6 - Roll/Pitch/Yaw + Linear Accel Filter"));
   Serial.println(F("7 - Tong hop"));
   Serial.println(F("0 - Menu"));
   Serial.print(F("Calib: "));
@@ -188,6 +276,10 @@ void flush_serial() {
   delay(10);
   while (Serial.available()) Serial.read();
 }
+
+// ============================================================
+//  Bài 1 – Đo lường cơ bản & Đặc tính tĩnh
+// ============================================================
 
 void task1_static() {
   Serial.println(F("BAI 1: DO LUONG CO BAN"));
@@ -240,34 +332,36 @@ void task1_static() {
   Serial.println(F("\n--- KET QUA ---"));
   Serial.println(F("[ACCEL] (g)"));
   Serial.print(F("  Mean: Ax=")); Serial.print(m_ax,5);
-  Serial.print(F("  Ay="));      Serial.print(m_ay,5);
-  Serial.print(F("  Az="));      Serial.println(m_az,5);
+  Serial.print(F("  Ay="));       Serial.print(m_ay,5);
+  Serial.print(F("  Az="));       Serial.println(m_az,5);
   Serial.print(F("  STD:  Ax=")); Serial.print(s_ax,6);
-  Serial.print(F("  Ay="));      Serial.print(s_ay,6);
-  Serial.print(F("  Az="));      Serial.println(s_az,6);
+  Serial.print(F("  Ay="));       Serial.print(s_ay,6);
+  Serial.print(F("  Az="));       Serial.println(s_az,6);
 
   Serial.println(F("[GYRO] (deg/s)"));
   Serial.print(F("  Mean: Gx=")); Serial.print(m_gx,5);
-  Serial.print(F("  Gy="));       Serial.print(m_gy,5);
-  Serial.print(F("  Gz="));       Serial.println(m_gz,5);
+  Serial.print(F("  Gy="));        Serial.print(m_gy,5);
+  Serial.print(F("  Gz="));        Serial.println(m_gz,5);
   Serial.print(F("  STD:  Gx=")); Serial.print(s_gx,6);
-  Serial.print(F("  Gy="));       Serial.print(s_gy,6);
-  Serial.print(F("  Gz="));       Serial.println(s_gz,6);
+  Serial.print(F("  Gy="));        Serial.print(s_gy,6);
+  Serial.print(F("  Gz="));        Serial.println(s_gz,6);
 
   Serial.print(F("|a| = ")); Serial.print(mag,5);
   Serial.print(F(" g  Sai lech: ")); Serial.print(abs(mag-1.0f)*100,2); Serial.println(F("%"));
 
   if (abs(m_ax)<0.05f && abs(m_ay)<0.05f) Serial.println(F("Accel X,Y offset OK"));
   else                                     Serial.println(F("Accel offset lon, can calib"));
-
   if (abs(m_gx)<0.5f && abs(m_gy)<0.5f && abs(m_gz)<0.5f) Serial.println(F("Gyro offset OK"));
-  else                                                      Serial.println(F("Gyro offset lon, can calib"));
-
+  else                                                       Serial.println(F("Gyro offset lon, can calib"));
   if (abs(mag-1.0f)<0.03f) Serial.println(F("|a| trong gioi han 3%"));
   else                     Serial.println(F("|a| lech >3%"));
 
   Serial.println(F("\nBai 1 xong. Gui '0' de ve menu."));
 }
+
+// ============================================================
+//  Bài 2 – Hiệu chỉnh (Calibration)
+// ============================================================
 
 void task2_calib_gyro() {
   Serial.println(F("\n[2A] CALIB GYRO - Giu cam bien yen, nhan phim:"));
@@ -278,7 +372,6 @@ void task2_calib_gyro() {
   double sq_gx=0, sq_gy=0, sq_gz=0;
 
   Serial.println(F("gx,gy,gz"));
-
   for (int i = 0; i < N; i++) {
     uint8_t buf[14];
     mpu_read_burst(REG_ACCEL_XOUT_H, buf, 14);
@@ -365,19 +458,21 @@ void task2_calib_accel_6pos() {
   float mag_z_up = sqrt(pow(means[0][0]+calib.ax_off,2)+pow(means[0][1]+calib.ay_off,2)+pow(means[0][2]+calib.az_off,2));
   float mag_x_up = sqrt(pow(means[2][0]+calib.ax_off,2)+pow(means[2][1]+calib.ay_off,2)+pow(means[2][2]+calib.az_off,2));
   Serial.print(F("|a| Pos1=")); Serial.print(mag_z_up,4);
-  Serial.print(F("  Pos3=")); Serial.println(mag_x_up,4);
+  Serial.print(F("  Pos3="));   Serial.println(mag_x_up,4);
 }
 
 void task2_calibrate() {
   Serial.println(F("BAI 2: CALIBRATION"));
   Serial.println(F("G - Gyro  /  A - Accel  /  B - Ca hai"));
-
   char c = toupper(wait_serial());
   if (c=='G' || c=='B') task2_calib_gyro();
   if (c=='A' || c=='B') task2_calib_accel_6pos();
-
   Serial.println(F("Calib xong. Gui '0' de ve menu."));
 }
+
+// ============================================================
+//  Bài 3 – Khảo sát ảnh hưởng gia tốc trọng trường
+// ============================================================
 
 void task3_gravity() {
   Serial.println(F("BAI 3: ANH HUONG GIA TOC TRONG TRUONG"));
@@ -393,9 +488,9 @@ void task3_gravity() {
   };
   for (int i = 0; i < 6; i++) {
     Serial.print(F("  ")); Serial.print((int)theory[i][0]);
-    Serial.print(F(" | "));  Serial.print(theory[i][1],3);
-    Serial.print(F(" | "));  Serial.print(theory[i][2],3);
-    Serial.print(F(" | "));  Serial.print(theory[i][3],3);
+    Serial.print(F(" | ")); Serial.print(theory[i][1],3);
+    Serial.print(F(" | ")); Serial.print(theory[i][2],3);
+    Serial.print(F(" | ")); Serial.print(theory[i][3],3);
     Serial.println(F(" | 1.000"));
   }
 
@@ -434,6 +529,10 @@ void task3_gravity() {
   Serial.println(F("\nBai 3 xong. Gui '0' de ve menu."));
 }
 
+// ============================================================
+//  Bài 4 – Bộ lọc Complementary & Kalman
+// ============================================================
+
 void task4_filter() {
   Serial.println(F("BAI 4: BO LOC"));
   Serial.println(F("C - Complementary  /  K - Kalman  /  B - Ca hai  /  A - Tuy chinh alpha"));
@@ -456,8 +555,8 @@ void task4_filter() {
   last_us  = micros();
 
   read_sensor();
-  cf_roll     = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
-  cf_pitch    = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
+  cf_roll        = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
+  cf_pitch       = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
   kf_roll.angle  = cf_roll;
   kf_pitch.angle = cf_pitch;
 
@@ -505,6 +604,10 @@ void task4_filter() {
   Serial.println(F("\nBai 4 xong. Gui '0' de ve menu."));
 }
 
+// ============================================================
+//  Bài 5 – Đo shock & Phân tích dao động
+// ============================================================
+
 void task5_shock() {
   Serial.println(F("BAI 5: SHOCK & DAO DONG"));
   Serial.println(F("S - Shock detection  /  V - Vibration sampling 512 mau @ 500Hz"));
@@ -519,7 +622,6 @@ void task5_shock() {
     bool in_shock = false;
     unsigned long t_s = 0;
     float peak_g = 0;
-
     mpu_write(REG_SMPLRT_DIV, 1);
     delay(50);
 
@@ -533,9 +635,7 @@ void task5_shock() {
       bool is_shock = (abs(mag-1.0f) > SHOCK_THRESHOLD);
 
       if (is_shock && !in_shock) {
-        in_shock = true;
-        t_s = millis();
-        peak_g = mag;
+        in_shock = true; t_s = millis(); peak_g = mag;
         Serial.println(F(">>> SHOCK DETECTED!"));
       }
       if (is_shock && in_shock && mag > peak_g) peak_g = mag;
@@ -543,8 +643,7 @@ void task5_shock() {
         Serial.print(F(">>> SHOCK END. "));
         Serial.print(millis()-t_s); Serial.print(F(" ms | peak: "));
         Serial.print(peak_g,3); Serial.println(F(" g"));
-        in_shock = false;
-        peak_g = 0;
+        in_shock = false; peak_g = 0;
       }
 
       Serial.print(millis());    Serial.print(',');
@@ -556,16 +655,13 @@ void task5_shock() {
 
       while ((micros()-t0) < 2000UL);
     }
-
     mpu_write(REG_SMPLRT_DIV, 9);
 
   } else {
     Serial.println(F("512 mau @ 500Hz. Nhan phim de bat dau:"));
     wait_serial();
-
     mpu_write(REG_SMPLRT_DIV, 1);
     delay(100);
-
     Serial.println(F("SAMPLE_START"));
     Serial.println(F("fs=500"));
     Serial.println(F("n=512"));
@@ -577,9 +673,7 @@ void task5_shock() {
       float ax = (int16_t)((buf[0]<<8)|buf[1]) / ACCEL_SCALE_2G;
       float ay = (int16_t)((buf[2]<<8)|buf[3]) / ACCEL_SCALE_2G;
       float az = (int16_t)((buf[4]<<8)|buf[5]) / ACCEL_SCALE_2G;
-
       if (calib.done) { ax+=calib.ax_off; ay+=calib.ay_off; az+=calib.az_off; }
-
       float mag = sqrt(ax*ax+ay*ay+az*az) - 1.0f;
       Serial.println(mag,5);
       while ((micros()-t0) < 2000UL);
@@ -592,59 +686,141 @@ void task5_shock() {
   Serial.println(F("\nBai 5 xong. Gui '0' de ve menu."));
 }
 
+// ============================================================
+//  Bài 6 – Ước lượng góc Roll / Pitch / Yaw  (Phần 6)
+//
+//  6.1  Roll/Pitch từ Accelerometer (atan2)
+//  6.2  Tích phân Gyroscope → Roll/Pitch/Yaw_Gyro
+//  6.3  Kalman filter → Roll_KF, Pitch_KF (ổn định, đánh giá drift)
+//  6.4  Bộ lọc loại ảnh hưởng vận tốc góc & trọng trường
+//         • LPF  → ước lượng vector g (Gravity_X/Y/Z)
+//         • HPF  → gia tốc tuyến tính (Linear_Ax/Ay/Az)
+//         • Gyro coupling compensation → Filtered_Ax/Ay/Az
+// ============================================================
+
 void task6_angles() {
-  Serial.println(F("BAI 6: ROLL / PITCH / YAW"));
-  Serial.println(F("Time_ms,Roll_Accel,Pitch_Accel,Roll_Gyro,Pitch_Gyro,Yaw_Gyro,Roll_KF,Pitch_KF,Yaw_KF"));
+  Serial.println(F("========================================"));
+  Serial.println(F("BAI 6: UOC LUONG GOC ROLL / PITCH / YAW"));
+  Serial.println(F("========================================"));
+  Serial.println(F("Cot du lieu (CSV):"));
+  Serial.println(F("  Time_ms        : thoi gian (ms)"));
+  Serial.println(F("  Roll_Accel     : Roll tu Accelerometer (6.1)"));
+  Serial.println(F("  Pitch_Accel    : Pitch tu Accelerometer (6.1)"));
+  Serial.println(F("  Roll_Gyro      : Roll tich phan Gyro (6.2)"));
+  Serial.println(F("  Pitch_Gyro     : Pitch tich phan Gyro (6.2)"));
+  Serial.println(F("  Yaw_Gyro       : Yaw tich phan Gyro (6.2 - co drift)"));
+  Serial.println(F("  Roll_KF        : Roll sau Kalman (6.3)"));
+  Serial.println(F("  Pitch_KF       : Pitch sau Kalman (6.3)"));
+  Serial.println(F("  Gravity_X/Y/Z  : Vector g uoc luong (LPF) (6.4)"));
+  Serial.println(F("  Linear_Ax/Ay/Az: Gia toc tuyen tinh (HPF-g) (6.4)"));
+  Serial.println(F("  Filtered_Ax/Ay/Az: Sau bu anh huong van toc goc (6.4)"));
+  Serial.println(F("----------------------------------------"));
+  Serial.println(F("Time_ms,Roll_Accel,Pitch_Accel,Roll_Gyro,Pitch_Gyro,Yaw_Gyro,Roll_KF,Pitch_KF,Gravity_X,Gravity_Y,Gravity_Z,Linear_Ax,Linear_Ay,Linear_Az,Filtered_Ax,Filtered_Ay,Filtered_Az"));
   Serial.println(F("Gui 'q' de dung"));
   delay(500);
 
-  float roll_g=0, pitch_g=0, yaw_g=0, yaw_kf=0;
+  // ---------- Khởi tạo ----------
+  float roll_gyro  = 0, pitch_gyro = 0, yaw_gyro = 0;
+  float gx_prev    = 0, gy_prev    = 0, gz_prev  = 0;
+
   kf_roll  = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
   kf_pitch = {0, 0, {{0,0},{0,0}}, 0.001f, 0.003f, 0.03f};
-  last_us  = micros();
+
+  // Reset bộ lọc tuyến tính
+  lin_accel = {0,0,0,  0,0,0,  0,0,0,  HPF_ALPHA, LPF_ALPHA_ACCEL};
 
   read_sensor();
-  float r0 = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
-  float p0 = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
-  roll_g = r0; pitch_g = p0;
-  kf_roll.angle = r0; kf_pitch.angle = p0;
 
+  // Góc ban đầu từ accel (6.1)
+  float r0 = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
+  float p0 = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g + imu.az_g*imu.az_g)) * RAD_TO_DEG;
+  roll_gyro = r0;  pitch_gyro = p0;
+  kf_roll.angle = r0;  kf_pitch.angle = p0;
+
+  // Khởi tạo bộ lọc tuyến tính với mẫu đầu tiên
+  lin_accel.ax_lpf = lin_accel.ax_prev = imu.ax_g;
+  lin_accel.ay_lpf = lin_accel.ay_prev = imu.ay_g;
+  lin_accel.az_lpf = lin_accel.az_prev = imu.az_g;
+  gx_prev = imu.gx_dps;
+  gy_prev = imu.gy_dps;
+  gz_prev = imu.gz_dps;
+
+  last_us = micros();
+
+  // ---------- Vòng lặp chính ----------
   while (true) {
-    if (Serial.available()) { char c=Serial.read(); if(c=='q'||c=='Q') break; }
+    if (Serial.available()) {
+      char c = Serial.read();
+      if (c=='q' || c=='Q') break;
+    }
 
     unsigned long now = micros();
     dt = (now - last_us) / 1000000.0f;
     last_us = now;
-    if (dt<=0||dt>0.5f) dt=0.01f;
+    if (dt <= 0 || dt > 0.5f) dt = 0.01f;
 
     read_sensor();
 
+    // --- 6.1  Góc từ Accelerometer ---
     float roll_a  = atan2f(imu.ay_g, imu.az_g) * RAD_TO_DEG;
-    float pitch_a = atan2f(-imu.ax_g, sqrtf(imu.ay_g*imu.ay_g+imu.az_g*imu.az_g)) * RAD_TO_DEG;
+    float pitch_a = atan2f(-imu.ax_g,
+                           sqrtf(imu.ay_g*imu.ay_g + imu.az_g*imu.az_g)) * RAD_TO_DEG;
 
-    roll_g  += imu.gx_dps * dt;
-    pitch_g += imu.gy_dps * dt;
-    yaw_g   += imu.gz_dps * dt;
-    yaw_kf  += imu.gz_dps * dt;
+    // --- 6.2  Tích phân Gyroscope ---
+    roll_gyro  += imu.gx_dps * dt;
+    pitch_gyro += imu.gy_dps * dt;
+    yaw_gyro   += imu.gz_dps * dt;
 
+    // --- 6.3  Kalman filter ---
     kf_roll_out  = kalman_update(&kf_roll,  roll_a,  imu.gx_dps, dt);
     kf_pitch_out = kalman_update(&kf_pitch, pitch_a, imu.gy_dps, dt);
 
-    Serial.print(millis());       Serial.print(',');
-    Serial.print(roll_a,2);       Serial.print(',');
-    Serial.print(pitch_a,2);      Serial.print(',');
-    Serial.print(roll_g,2);       Serial.print(',');
-    Serial.print(pitch_g,2);      Serial.print(',');
-    Serial.print(yaw_g,2);        Serial.print(',');
-    Serial.print(kf_roll_out,2);  Serial.print(',');
-    Serial.print(kf_pitch_out,2); Serial.print(',');
-    Serial.println(yaw_kf,2);
+    // --- 6.4  Loại bỏ ảnh hưởng trọng trường và vận tốc góc ---
+    estimate_linear_accel(&lin_accel,
+                          imu.ax_g, imu.ay_g, imu.az_g);
+
+    float fax = compensate_gyro_coupling(lin_accel.ax_hpf, imu.gx_dps, gx_prev, dt);
+    float fay = compensate_gyro_coupling(lin_accel.ay_hpf, imu.gy_dps, gy_prev, dt);
+    float faz = compensate_gyro_coupling(lin_accel.az_hpf, imu.gz_dps, gz_prev, dt);
+
+    gx_prev = imu.gx_dps;
+    gy_prev = imu.gy_dps;
+    gz_prev = imu.gz_dps;
+
+    // --- In CSV ---
+    Serial.print(millis());          Serial.print(',');
+    // 6.1
+    Serial.print(roll_a,2);          Serial.print(',');
+    Serial.print(pitch_a,2);         Serial.print(',');
+    // 6.2
+    Serial.print(roll_gyro,2);       Serial.print(',');
+    Serial.print(pitch_gyro,2);      Serial.print(',');
+    Serial.print(yaw_gyro,2);        Serial.print(',');
+    // 6.3
+    Serial.print(kf_roll_out,2);     Serial.print(',');
+    Serial.print(kf_pitch_out,2);    Serial.print(',');
+    // 6.4 – vector trọng trường ước lượng (LPF)
+    Serial.print(lin_accel.ax_lpf,4); Serial.print(',');
+    Serial.print(lin_accel.ay_lpf,4); Serial.print(',');
+    Serial.print(lin_accel.az_lpf,4); Serial.print(',');
+    // 6.4 – gia tốc tuyến tính (HPF)
+    Serial.print(lin_accel.ax_hpf,4); Serial.print(',');
+    Serial.print(lin_accel.ay_hpf,4); Serial.print(',');
+    Serial.print(lin_accel.az_hpf,4); Serial.print(',');
+    // 6.4 – sau bù vận tốc góc
+    Serial.print(fax,4);              Serial.print(',');
+    Serial.print(fay,4);              Serial.print(',');
+    Serial.println(faz,4);
 
     delay(10);
   }
 
   Serial.println(F("\nBai 6 xong. Gui '0' de ve menu."));
 }
+
+// ============================================================
+//  Bài 7 – Tổng hợp
+// ============================================================
 
 void task7_summary() {
   Serial.println(F("BAI 7: TONG HOP"));
@@ -749,6 +925,10 @@ void task7_summary() {
 
   Serial.println(F("\nBai 7 xong. Gui '0' de ve menu."));
 }
+
+// ============================================================
+//  setup & loop
+// ============================================================
 
 void setup() {
   Serial.begin(115200);

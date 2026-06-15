@@ -111,12 +111,18 @@ title('Bai 5 - Shock Detection: Toan bo tin hieu');
 legend('Location','northwest'); grid on; ylim([-1 8]);
 
 %% --- Figure 2: Zoom vao tung su kien shock + settling ---
-figure('Name','Bai 5 - Chi tiet Shock','NumberTitle','off','Position',[50 50 1100 500]);
+% Tăng chiều cao Figure lên 600 để có không gian xếp dọc
+figure('Name','Bai 5 - Chi tiet Shock','NumberTitle','off','Position',[50 50 1100 600]);
+
 for k = 1:n_event
-    subplot(1, n_event, k);
+    % Chuyển sang ma trận xếp dọc: n_event hàng, 1 cột
+    subplot(n_event, 1, k);
+    
     s = shock_events(k).start_idx;
     e = shock_events(k).end_idx;    
-    i0 = max(1,   find(time_ms >= time_ms(s)-50, 1));
+    
+    % Trích xuất chỉ số biên
+    i0 = max(1, find(time_ms >= time_ms(s)-50, 1));
     i1 = min(length(time_ms), find(time_ms >= time_ms(e)+200, 1));
     if isempty(i1), i1 = length(time_ms); end
     
@@ -125,11 +131,20 @@ for k = 1:n_event
     
     hold on;
     plot(t_win, m_win, 'b-', 'LineWidth', 1.2);
+    
+    % Vẽ dải đánh dấu vùng xung lực
     patch([time_ms(s) time_ms(e) time_ms(e) time_ms(s)], ...
-          [0 0 8 8], 'r', 'FaceAlpha', 0.2, 'EdgeColor','none');
+          [0 0 10 10], 'r', 'FaceAlpha', 0.2, 'EdgeColor','none');
+          
     yline(1.0, 'k--', 'LineWidth', 1);
     yline(1.05, 'g:', 'LineWidth', 0.8);
     yline(0.95, 'g:', 'LineWidth', 0.8);
+    
+    % Ép giới hạn trục X (Ngăn hiện tượng tràn dữ liệu từ xung tiếp theo)
+    xlim([t_win(1) t_win(end)]);
+    
+    % Khóa giới hạn trục Y cho tất cả subplot để đảm bảo đồng nhất về tỷ lệ
+    ylim([0 max(Mag(i0:i1)) + 1]); 
     
     xlabel('t (ms)'); ylabel('|a| (g)');
     title(sprintf('Shock %d: Dinh=%.2fg | Xung=%dms | Settle=%.0fms', ...

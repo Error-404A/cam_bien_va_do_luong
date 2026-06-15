@@ -156,21 +156,6 @@ ylim([0, max(max(err_pct), 3)*1.4]);
 style_ax(ax5, AX, FG, GRID);
 ax5.YAxis.Color = FG;
 
-% --- Vector gia toc 2D ---
-ax6 = subplot(2,3,6);
-theta_cont = linspace(0, pi/2, 100);
-plot(sin(theta_cont), cos(theta_cont), '--', 'Color', CLT, 'LineWidth',1.5, ...
-     'DisplayName','Duong tron don vi ly tuong'); hold on;
-scatter(ax_meas, az_meas, 80, CGB, 'filled', 'DisplayName','Do thuc te');
-for i = 1:6
-    text(ax_meas(i)+0.015, az_meas(i)+0.015, sprintf('%d°', angles_list(i)), ...
-         'FontSize',9, 'Color', FG);
-end
-xlabel('Ax (g)'); ylabel('Az (g)');
-title('Quy dao vector gia toc (Ax vs Az)');
-legend('Location','best'); grid on; axis equal;
-xlim([-0.1 1.1]); ylim([-0.1 1.1]);
-style_ax(ax6, AX, FG, GRID);
 % --- Super title ---
 sgt = sgtitle('BAI 3 - KHAO SAT ANH HUONG GIA TOC TRONG TRUONG', ...
               'FontSize',13, 'FontWeight','bold');
